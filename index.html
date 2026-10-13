@@ -2,12 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>aruco-web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=1" />
+    <title>Demo</title>
   </head>
+
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="camera-controls">
+      <label for="camera-select">Camera:</label>
+      <select id="camera-select"></select>
+      <label for="engine-select" style="margin-left: 12px">Engine:</label>
+      <select id="engine-select">
+        <option value="wasm" selected>WebAssembly (SIMD)</option>
+        <option value="ts">TypeScript</option>
+      </select>
+    </div>
+
+    <div id="app">
+      <video loop autoplay muted playsinline id="video"></video>
+      <canvas id="canvas"></canvas>
+    </div>
+    <script src="/src/main.ts" type="module"></script>
   </body>
 </html>
