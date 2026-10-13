@@ -1,0 +1,9 @@
+* {
+  box-sizing: border-box;
+  font: inherit;
+}
+
+body {
+  font-family: monospace;
+  font-size: 12px;
+}
