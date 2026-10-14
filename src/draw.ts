@@ -1,3 +1,4 @@
+import { initCamera, setupCameraSelector } from "./camera.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Marker, Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
 import { TrackedMarker, Tracker } from "./lib/tracker.ts";
@@ -47,7 +48,10 @@ window.addEventListener("load", async () => {
   });
 
   await initCamera(video);
-  await setupCameraSelector(video, tracker);
+  await setupCameraSelector(video, () => tracker.reset(), {
+    idealWidth: VIDEO_WIDTH,
+    idealHeight: VIDEO_HEIGHT,
+  });
 
   startDetectionLoop(video, canvas, tracker);
 });
@@ -91,74 +95,4 @@ function drawCorners(ctx: CanvasRenderingContext2D, markers: (Marker | TrackedMa
   }
 
   ctx.restore();
-}
-
-// --- Camera & Stream Management ---
-async function initCamera(video: HTMLVideoElement): Promise<void> {
-  const constraints: MediaStreamConstraints = {
-    audio: false,
-    video: {
-      facingMode: "environment",
-      width: 1280,
-      height: 720,
-    },
-  };
-
-  video.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
-  await video.play();
-
-  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    await new Promise((resolve) => video.addEventListener("loadeddata", resolve, { once: true }));
-  }
-}
-
-async function setupCameraSelector(videoElement: HTMLVideoElement, tracker: Tracker): Promise<void> {
-  const select = document.getElementById("camera-select") as HTMLSelectElement | null;
-  if (!select || !navigator.mediaDevices?.enumerateDevices) {
-    return;
-  }
-
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter((device) => device.kind === "videoinput");
-
-    select.innerHTML = "";
-
-    const activeTrack = videoElement.srcObject instanceof MediaStream ? videoElement.srcObject.getVideoTracks()[0] : null;
-    const currentDeviceId = activeTrack?.getSettings().deviceId ?? null;
-
-    videoDevices.forEach((device, index) => {
-      const option = document.createElement("option");
-      option.value = device.deviceId;
-      option.text = device.label || `Camera ${index + 1}`;
-      option.selected = device.deviceId === currentDeviceId;
-      select.appendChild(option);
-    });
-
-    select.onchange = async () => {
-      tracker.reset();
-
-      if (videoElement.srcObject instanceof MediaStream) {
-        videoElement.srcObject.getTracks().forEach((track) => track.stop());
-      }
-
-      const constraints: MediaStreamConstraints = {
-        audio: false,
-        video: {
-          deviceId: { exact: select.value },
-          width: { ideal: VIDEO_WIDTH },
-          height: { ideal: VIDEO_HEIGHT },
-        },
-      };
-
-      try {
-        videoElement.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
-        await videoElement.play();
-      } catch (err) {
-        console.error("Error switching camera:", err);
-      }
-    };
-  } catch (err) {
-    console.error("Error enumerating devices:", err);
-  }
 }

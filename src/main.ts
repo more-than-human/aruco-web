@@ -1,3 +1,4 @@
+import { initCamera, setupCameraSelector } from "./camera.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
 import { Marker, Detector as TsDetector } from "./lib/aruco.ts";
@@ -11,30 +12,6 @@ let wasmDetector: WasmDetector | null = null;
 let tsDetector: TsDetector | null = null;
 let tracker: Tracker;
 let trackingEnabled = true;
-
-async function initCamera(): Promise<HTMLVideoElement> {
-  const constraints: MediaStreamConstraints = {
-    audio: false,
-    video: {
-      // using the "environment" rear camera
-      facingMode: "environment",
-      // using the "user" front camera
-      // facingMode: "user",
-      width: 1280,
-      height: 720,
-    },
-  };
-
-  // initialize video source
-  const video = document.querySelector<HTMLVideoElement>("#video")!;
-  video.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
-
-  return new Promise((resolve) => {
-    video.onloadedmetadata = () => {
-      resolve(video);
-    };
-  });
-}
 
 function initTargetCanvas(): void {
   // target canvas should overlap source video
@@ -87,55 +64,50 @@ window.addEventListener("load", async () => {
   setupEngineSelector();
   setupTrackingControls();
 
-  initCamera()
-    .then((video) => {
-      // start camera playback
-      sourceVideo = video;
-      sourceVideo.width = 640;
-      sourceVideo.height = 480;
-      sourceVideo.play();
+  const video = document.querySelector<HTMLVideoElement>("#video")!;
+  sourceVideo = video;
+  sourceVideo.width = 640;
+  sourceVideo.height = 480;
 
-      // init target canvas
-      initTargetCanvas();
+  try {
+    await initCamera(sourceVideo);
+  } catch (err) {
+    console.error("Error initializing camera:", err);
+    return;
+  }
 
-      // Populate camera selector after initial permission is granted
-      setupCameraSelector(sourceVideo);
+  initTargetCanvas();
 
-      return new Promise<HTMLVideoElement>((resolve) => {
-        sourceVideo.addEventListener("loadeddata", (event) => {
-          console.log("Camera is ready", event);
-          resolve(sourceVideo);
-        });
-      });
-    })
-    .then((video) => {
-      let imageData: ImageData;
+  await setupCameraSelector(sourceVideo, () => {
+    tracker.reset();
+  });
 
-      function update() {
-        const ctx = targetCanvas.getContext("2d", {
-          willReadFrequently: true,
-        })!;
-        ctx.drawImage(video, 0, 0, video.width, video.height);
-        imageData = ctx.getImageData(0, 0, video.width, video.height);
+  let imageData: ImageData;
 
-        const now = performance.now();
-        let markers: (Marker | TrackedMarker)[];
+  function update() {
+    const ctx = targetCanvas.getContext("2d", {
+      willReadFrequently: true,
+    })!;
+    ctx.drawImage(sourceVideo, 0, 0, sourceVideo.width, sourceVideo.height);
+    imageData = ctx.getImageData(0, 0, sourceVideo.width, sourceVideo.height);
 
-        if (trackingEnabled) {
-          markers = tracker.detect(imageData, now);
-        } else {
-          const detector = activeEngine === "wasm" && wasmDetector ? wasmDetector : tsDetector;
-          markers = detector ? detector.detect(imageData) : [];
-        }
+    const now = performance.now();
+    let markers: (Marker | TrackedMarker)[];
 
-        drawCorners(ctx, markers);
-        drawId(ctx, markers);
-        updateStatusBadge(markers);
-        requestAnimationFrame(update);
-      }
+    if (trackingEnabled) {
+      markers = tracker.detect(imageData, now);
+    } else {
+      const detector = activeEngine === "wasm" && wasmDetector ? wasmDetector : tsDetector;
+      markers = detector ? detector.detect(imageData) : [];
+    }
 
-      update();
-    });
+    drawCorners(ctx, markers);
+    drawId(ctx, markers);
+    updateStatusBadge(markers);
+    requestAnimationFrame(update);
+  }
+
+  update();
 });
 
 function setupEngineSelector(): void {
@@ -197,74 +169,6 @@ function updateStatusBadge(markers?: (Marker | TrackedMarker)[]): void {
       statsEl.textContent = `Kalman: ${activeCount} active`;
       statsEl.style.color = "#2e7d32";
     }
-  }
-}
-
-async function setupCameraSelector(videoElement: HTMLVideoElement): Promise<void> {
-  const select = document.getElementById("camera-select") as HTMLSelectElement | null;
-  if (!select) {
-    return;
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-    console.warn("enumerateDevices() not supported.");
-    return;
-  }
-
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter((device) => device.kind === "videoinput");
-
-    select.innerHTML = "";
-
-    // Identify currently active camera device
-    let currentDeviceId: string | null = null;
-    if (videoElement.srcObject instanceof MediaStream) {
-      const videoTracks = videoElement.srcObject.getVideoTracks();
-      if (videoTracks.length > 0) {
-        currentDeviceId = videoTracks[0].getSettings().deviceId || null;
-      }
-    }
-
-    videoDevices.forEach((device, index) => {
-      const option = document.createElement("option");
-      option.value = device.deviceId;
-      option.text = device.label || `Camera ${index + 1}`;
-      if (device.deviceId === currentDeviceId) {
-        option.selected = true;
-      }
-      select.appendChild(option);
-    });
-
-    select.onchange = async () => {
-      const selectedDeviceId = select.value;
-
-      tracker.reset();
-
-      // Stop existing video tracks before switching
-      if (videoElement.srcObject instanceof MediaStream) {
-        videoElement.srcObject.getTracks().forEach((track: MediaStreamTrack) => track.stop());
-      }
-
-      const constraints: MediaStreamConstraints = {
-        audio: false,
-        video: {
-          deviceId: { exact: selectedDeviceId },
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-      };
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        videoElement.srcObject = stream;
-        await videoElement.play();
-        initTargetCanvas();
-      } catch (err) {
-        console.error("Error switching camera:", err);
-      }
-    };
-  } catch (err) {
-    console.error("Error enumerating devices:", err);
   }
 }
 
