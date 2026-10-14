@@ -47,6 +47,7 @@ export default bytes.buffer;
 }
 
 export default defineConfig({
+  base: "/aruco-web/",
   plugins: [watPlugin()],
   build: {
     rollupOptions: {
