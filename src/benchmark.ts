@@ -1,43 +1,7 @@
 import benchImageSrc from "../benchmark/bench-01.jpg";
-import { Aruco4x4Detector } from "./lib-wasm-lite/lib";
-import type { DetectedMarker as LiteDetectedMarker } from "./lib-wasm-lite/types";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm";
-import { Detector as TsDetector, Marker as TsMarker } from "./lib/aruco";
-
-/**
- * Common detector interface for benchmarking.
- */
-interface IBenchmarkDetector {
-  detect(imageData: ImageData): any[];
-}
-
-/**
- * Adapter for Aruco4x4Detector (from lib-wasm-lite).
- * Adapts input (ImageData) and converts output DetectedMarker format
- * into the standard format { id, corners, hammingDistance }.
- */
-class Aruco4x4Adapter implements IBenchmarkDetector {
-  private detector: Aruco4x4Detector;
-  private maxHammingDistance: number;
-
-  constructor(detector: Aruco4x4Detector, maxHammingDistance = 2) {
-    this.detector = detector;
-    this.maxHammingDistance = maxHammingDistance;
-  }
-
-  detect(imageData: ImageData): TsMarker[] {
-    const rawMarkers: LiteDetectedMarker[] = this.detector.detect(imageData, this.maxHammingDistance);
-    return rawMarkers.map(
-      (m) =>
-        new TsMarker(
-          m.id,
-          m.corners.map((c) => ({ x: c.x, y: c.y })),
-          m.distance,
-        ),
-    );
-  }
-}
+import { Detector as TsDetector } from "./lib/aruco";
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -113,12 +77,6 @@ async function runBenchmark() {
   try {
     if (statusEl) statusEl.textContent = "Loading WebAssembly modules...";
     await initArUcoWasm(arucoWatBytes);
-    const liteDetector = new Aruco4x4Detector({
-      dictionaryName: "6x6_1000",
-      maxHammingDistance: 2,
-    });
-    await liteDetector.init();
-    const liteAdapter = new Aruco4x4Adapter(liteDetector, 2);
 
     if (statusEl) statusEl.textContent = "Loading bench-01.jpg...";
     const img = await loadImage(benchImageSrc);
@@ -146,15 +104,13 @@ async function runBenchmark() {
 
     if (statusEl) statusEl.textContent = "Running WASM Lite benchmark...";
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const liteMetrics = runBenchmarkOnDetector("WebAssembly Lite SIMD", () => liteAdapter.detect(imageData), 50);
 
     if (statusEl) statusEl.textContent = "Benchmark complete!";
 
     const speedupWasm = tsMetrics.avgLatency / wasmMetrics.avgLatency;
-    const speedupLite = tsMetrics.avgLatency / liteMetrics.avgLatency;
 
     if (resultsEl) {
-      const allMetrics = [liteMetrics, wasmMetrics, tsMetrics];
+      const allMetrics = [wasmMetrics, tsMetrics];
       resultsEl.innerHTML = `
         <h2>Benchmark Results (bench-01.jpg: ${imageData.width}x${imageData.height})</h2>
         <table border="1" cellpadding="6" style="border-collapse: collapse;">
@@ -189,17 +145,14 @@ async function runBenchmark() {
           </tbody>
         </table>
         <p><strong>WASM (SIMD) Speedup over TS:</strong> ${speedupWasm.toFixed(2)}x faster</p>
-        <p><strong>WASM Lite Speedup over TS:</strong> ${speedupLite.toFixed(2)}x faster</p>
       `;
     }
 
     console.log("Benchmark Results:", {
       imageSize: `${imageData.width}x${imageData.height}`,
-      wasmLite: liteMetrics,
       wasm: wasmMetrics,
       typescript: tsMetrics,
       speedupWasm: `${speedupWasm.toFixed(2)}x`,
-      speedupLite: `${speedupLite.toFixed(2)}x`,
     });
   } catch (error) {
     if (statusEl) statusEl.textContent = `Error: ${error}`;
