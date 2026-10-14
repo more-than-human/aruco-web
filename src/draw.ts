@@ -55,15 +55,10 @@ window.addEventListener("load", async () => {
   });
 
   const digitizer = new PaperDigitizer(DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT, {
-    threshold: {
-      thresholdLow: 8, // Pick up faint strokes under low contrast
-      thresholdHigh: 22,
-      windowSize: 31,
-    },
     temporal: {
-      motionThreshold: 100, // Tolerant to residual jitter
-      requiredStableFrames: 1, // Faster ink confirmation
-      blendAlpha: 0.6,
+      motionThreshold: 1000, // Tolerant to residual jitter
+      requiredStableFrames: 0, // Faster ink confirmation
+      blendAlpha: 0.1,
     },
   });
 
