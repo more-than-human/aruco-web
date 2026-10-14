@@ -78,8 +78,8 @@ window.addEventListener("load", async () => {
     limit: 50,
     maxHammingDistance: 2,
     detector: activeDetector,
-    maxMissedFrames: 5,
-    processNoise: 15.0,
+    maxMissedFrames: 20,
+    processNoise: 8.0,
     measurementNoise: 2.5,
     coastVelocityDamping: 0.85,
   });
