@@ -7,12 +7,12 @@
 
   ;; Fixed Memory Layout Constants:
   ;; 0x00C0 (192)   : neighborhoodDeltas (16 x i32 = 64 bytes)
-  ;; 0x0100 (256)   : warpedData (48 * 48 = 2304 bytes)
-  ;; 0x0A00 (2560)  : otsu hist (256 * 4 = 1024 bytes)
-  ;; 0x0E00 (3584)  : perspective matrix (9 * f64 = 72 bytes)
+  ;; 0x0100 (256)   : warpedData (49 * 49 = 2401 bytes)
+  ;; 0x0B00 (2816)  : otsu hist (256 * 4 = 1024 bytes)
   ;; 0x0F00 (3840)  : candidates (512 * 32 bytes = 16384 bytes) [8 x i32 per quad]
   ;; 0x4F00 (20224) : tooNear flags (512 bytes)
-  ;; 0x5100 (20736) : approxPolyDP stack (2048 * 8 = 16384 bytes)
+  ;; 0x5100 (20736) : approxPolyDP stack (2048 * 8 = 16384 bytes) / rot0 scratch (256 bytes)
+  ;; 0x5200 (20992) : rot1 scratch (256 bytes)
   ;; 0x9100 (37120) : approxPolyDP poly result (512 * 8 = 4096 bytes)
   ;; 0xA100 (41216) : detected markers output (256 * 40 = 10240 bytes)
   ;; 0xC900 (51456) : dynamic heap base
@@ -780,7 +780,7 @@
     (local.get $p)
   )
 
-  ;; Warp perspective of 48x48 patch into 0x0100 (256)
+  ;; Warp perspective of 49x49 patch into 0x0100 (256)
   (func $warpPerspective (param $srcGray i32) (param $srcW i32) (param $srcH i32) (param $quadAddr i32)
     (local $x0 f64) (local $y0 f64) (local $x1 f64) (local $y1 f64)
     (local $x2 f64) (local $y2 f64) (local $x3 f64) (local $y3 f64)
@@ -806,11 +806,11 @@
 
     (if (i32.and (f64.eq (local.get $px) (f64.const 0)) (f64.eq (local.get $py) (f64.const 0)))
       (then
-        (local.set $m0 (f64.div (f64.sub (local.get $x1) (local.get $x0)) (f64.const 47)))
-        (local.set $m1 (f64.div (f64.sub (local.get $x2) (local.get $x1)) (f64.const 47)))
+        (local.set $m0 (f64.div (f64.sub (local.get $x1) (local.get $x0)) (f64.const 48)))
+        (local.set $m1 (f64.div (f64.sub (local.get $x2) (local.get $x1)) (f64.const 48)))
         (local.set $m2 (local.get $x0))
-        (local.set $m3 (f64.div (f64.sub (local.get $y1) (local.get $y0)) (f64.const 47)))
-        (local.set $m4 (f64.div (f64.sub (local.get $y2) (local.get $y1)) (f64.const 47)))
+        (local.set $m3 (f64.div (f64.sub (local.get $y1) (local.get $y0)) (f64.const 48)))
+        (local.set $m4 (f64.div (f64.sub (local.get $y2) (local.get $y1)) (f64.const 48)))
         (local.set $m5 (local.get $y0))
         (local.set $m6 (f64.const 0))
         (local.set $m7 (f64.const 0))
@@ -825,14 +825,14 @@
         (local.set $m6 (f64.div (f64.sub (f64.mul (local.get $px) (local.get $dy2)) (f64.mul (local.get $dx2) (local.get $py))) (local.get $den)))
         (local.set $m7 (f64.div (f64.sub (f64.mul (local.get $dx1) (local.get $py)) (f64.mul (local.get $px) (local.get $dy1))) (local.get $den)))
         (local.set $m8 (f64.const 1))
-        (local.set $m0 (f64.div (f64.add (f64.sub (local.get $x1) (local.get $x0)) (f64.mul (local.get $m6) (local.get $x1))) (f64.const 47)))
-        (local.set $m1 (f64.div (f64.add (f64.sub (local.get $x3) (local.get $x0)) (f64.mul (local.get $m7) (local.get $x3))) (f64.const 47)))
+        (local.set $m0 (f64.div (f64.add (f64.sub (local.get $x1) (local.get $x0)) (f64.mul (local.get $m6) (local.get $x1))) (f64.const 48)))
+        (local.set $m1 (f64.div (f64.add (f64.sub (local.get $x3) (local.get $x0)) (f64.mul (local.get $m7) (local.get $x3))) (f64.const 48)))
         (local.set $m2 (local.get $x0))
-        (local.set $m3 (f64.div (f64.add (f64.sub (local.get $y1) (local.get $y0)) (f64.mul (local.get $m6) (local.get $y1))) (f64.const 47)))
-        (local.set $m4 (f64.div (f64.add (f64.sub (local.get $y3) (local.get $y0)) (f64.mul (local.get $m7) (local.get $y3))) (f64.const 47)))
+        (local.set $m3 (f64.div (f64.add (f64.sub (local.get $y1) (local.get $y0)) (f64.mul (local.get $m6) (local.get $y1))) (f64.const 48)))
+        (local.set $m4 (f64.div (f64.add (f64.sub (local.get $y3) (local.get $y0)) (f64.mul (local.get $m7) (local.get $y3))) (f64.const 48)))
         (local.set $m5 (local.get $y0))
-        (local.set $m6 (f64.div (local.get $m6) (f64.const 47)))
-        (local.set $m7 (f64.div (local.get $m7) (f64.const 47)))
+        (local.set $m6 (f64.div (local.get $m6) (f64.const 48)))
+        (local.set $m7 (f64.div (local.get $m7) (f64.const 48)))
       )
     )
 
@@ -898,35 +898,35 @@
         )
         (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
         (local.set $j (i32.add (local.get $j) (i32.const 1)))
-        (br_if $jLoop (i32.lt_u (local.get $j) (i32.const 48)))
+        (br_if $jLoop (i32.lt_u (local.get $j) (i32.const 49)))
       )
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br_if $iLoop (i32.lt_u (local.get $i) (i32.const 48)))
+      (br_if $iLoop (i32.lt_u (local.get $i) (i32.const 49)))
     )
   )
 
-  ;; Otsu + SIMD Binary Threshold on warpedData (2304 bytes at 0x0100)
+  ;; Otsu + SIMD Binary Threshold on warpedData (2401 bytes at 0x0100)
   (func $otsuAndThreshold
     (local $i i32) (local $px i32) (local $hAddr i32) (local $sum i32)
     (local $sumB i32) (local $wB i32) (local $wF i32) (local $thresh i32)
     (local $mB f64) (local $mF f64) (local $between f64) (local $maxBetween f64)
     (local $vThresh v128) (local $vZero v128)
 
-    ;; Clear histogram at 0x0A00 (2560)
-    (memory.fill (i32.const 2560) (i32.const 0) (i32.const 1024))
+    ;; Clear histogram at 0x0B00 (2816)
+    (memory.fill (i32.const 2816) (i32.const 0) (i32.const 1024))
 
     (local.set $i (i32.const 0))
     (loop $histLoop
       (local.set $px (i32.load8_u (i32.add (i32.const 256) (local.get $i))))
-      (local.set $hAddr (i32.add (i32.const 2560) (i32.shl (local.get $px) (i32.const 2))))
+      (local.set $hAddr (i32.add (i32.const 2816) (i32.shl (local.get $px) (i32.const 2))))
       (i32.store (local.get $hAddr) (i32.add (i32.load (local.get $hAddr)) (i32.const 1)))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br_if $histLoop (i32.lt_u (local.get $i) (i32.const 2304)))
+      (br_if $histLoop (i32.lt_u (local.get $i) (i32.const 2401)))
     )
 
     (local.set $i (i32.const 0))
     (loop $sumLoop
-      (local.set $sum (i32.add (local.get $sum) (i32.mul (i32.load (i32.add (i32.const 2560) (i32.shl (local.get $i) (i32.const 2)))) (local.get $i))))
+      (local.set $sum (i32.add (local.get $sum) (i32.mul (i32.load (i32.add (i32.const 2816) (i32.shl (local.get $i) (i32.const 2)))) (local.get $i))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br_if $sumLoop (i32.lt_u (local.get $i) (i32.const 256)))
     )
@@ -936,11 +936,11 @@
     (block $otsuBreak
       (loop $otsuLoop
         (br_if $otsuBreak (i32.ge_u (local.get $i) (i32.const 256)))
-        (local.set $px (i32.load (i32.add (i32.const 2560) (i32.shl (local.get $i) (i32.const 2)))))
+        (local.set $px (i32.load (i32.add (i32.const 2816) (i32.shl (local.get $i) (i32.const 2)))))
         (local.set $wB (i32.add (local.get $wB) (local.get $px)))
         (if (i32.ne (local.get $wB) (i32.const 0))
           (then
-            (local.set $wF (i32.sub (i32.const 2304) (local.get $wB)))
+            (local.set $wF (i32.sub (i32.const 2401) (local.get $wB)))
             (br_if $otsuBreak (i32.eqz (local.get $wF)))
             (local.set $sumB (i32.add (local.get $sumB) (i32.mul (local.get $px) (local.get $i))))
             (local.set $mB (f64.div (f64.convert_i32_s (local.get $sumB)) (f64.convert_i32_s (local.get $wB))))
@@ -964,7 +964,7 @@
       )
     )
 
-    ;; SIMD binary threshold on 2304 bytes (144 x 16-byte vectors)
+    ;; SIMD binary threshold on 2400 bytes (150 x 16-byte vectors)
     (local.set $vThresh (i8x16.splat (local.get $thresh)))
     (local.set $vZero (i8x16.splat (i32.const 0)))
     (local.set $i (i32.const 0))
@@ -976,44 +976,84 @@
         )
       )
       (local.set $i (i32.add (local.get $i) (i32.const 16)))
-      (br_if $tLoop (i32.lt_u (local.get $i) (i32.const 2304)))
+      (br_if $tLoop (i32.lt_u (local.get $i) (i32.const 2400)))
+    )
+    ;; 1-byte tail at index 2400 (offset 2656)
+    (i32.store8 (i32.const 2656)
+      (select
+        (i32.const 255)
+        (i32.const 0)
+        (i32.gt_u (i32.load8_u (i32.const 2656)) (local.get $thresh))
+      )
     )
   )
 
-  ;; Count non-zero pixels in 8x8 cell at (cellX*8, cellY*8) in warpedData (0x0100, stride 48)
-  (func $countCellNonZero (param $cellX i32) (param $cellY i32) (result i32)
+  ;; Count non-zero pixels in cell at (cellX*cellW, cellY*cellW) in warpedData (0x0100, stride 49)
+  (func $countCellNonZero (param $cellX i32) (param $cellY i32) (param $cellW i32) (result i32)
     (local $r i32) (local $c i32) (local $pos i32) (local $nz i32)
-    (local.set $pos (i32.add (i32.const 256) (i32.add (i32.mul (i32.shl (local.get $cellY) (i32.const 3)) (i32.const 48)) (i32.shl (local.get $cellX) (i32.const 3)))))
+    (local.set $pos (i32.add (i32.const 256) (i32.add (i32.mul (i32.mul (local.get $cellY) (local.get $cellW)) (i32.const 49)) (i32.mul (local.get $cellX) (local.get $cellW)))))
     (loop $rLoop
       (local.set $c (i32.const 0))
       (loop $cLoop
         (local.set $nz (i32.add (local.get $nz) (i32.ne (i32.load8_u (i32.add (local.get $pos) (local.get $c))) (i32.const 0))))
         (local.set $c (i32.add (local.get $c) (i32.const 1)))
-        (br_if $cLoop (i32.lt_u (local.get $c) (i32.const 8)))
+        (br_if $cLoop (i32.lt_u (local.get $c) (local.get $cellW)))
       )
-      (local.set $pos (i32.add (local.get $pos) (i32.const 48)))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 49)))
       (local.set $r (i32.add (local.get $r) (i32.const 1)))
-      (br_if $rLoop (i32.lt_u (local.get $r) (i32.const 8)))
+      (br_if $rLoop (i32.lt_u (local.get $r) (local.get $cellW)))
     )
     (local.get $nz)
   )
 
-  ;; Rotate 16-bit 4x4 marker code 90 degrees clockwise
-  (func $rotateCode4x4 (param $code i32) (result i32)
-    (local $r i32) (local $c i32) (local $srcIdx i32) (local $bit i32) (local $out i32)
-    (loop $rLoop
-      (local.set $c (i32.const 0))
-      (loop $cLoop
-        (local.set $srcIdx (i32.add (i32.shl (i32.sub (i32.const 3) (local.get $c)) (i32.const 2)) (local.get $r)))
-        (local.set $bit (i32.and (i32.shr_u (local.get $code) (i32.sub (i32.const 15) (local.get $srcIdx))) (i32.const 1)))
-        (local.set $out (i32.or (i32.shl (local.get $out) (i32.const 1)) (local.get $bit)))
-        (local.set $c (i32.add (local.get $c) (i32.const 1)))
-        (br_if $cLoop (i32.lt_u (local.get $c) (i32.const 4)))
+  ;; Packs a square 2D array of i32 bits ($size x $size) into an i64 bitmask
+  (func $pack_bits_matrix (param $bits_ptr i32) (param $size i32) (result i64)
+    (local $len i32) (local $i i32) (local $mask i64)
+    (local.set $len (i32.mul (local.get $size) (local.get $size)))
+    (local.set $mask (i64.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $loop
+        (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
+        (local.set $mask
+          (i64.or
+            (i64.shl (local.get $mask) (i64.const 1))
+            (i64.extend_i32_u (i32.and (i32.load (i32.add (local.get $bits_ptr) (i32.shl (local.get $i) (i32.const 2)))) (i32.const 1)))
+          )
+        )
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $loop)
       )
-      (local.set $r (i32.add (local.get $r) (i32.const 1)))
-      (br_if $rLoop (i32.lt_u (local.get $r) (i32.const 4)))
     )
-    (local.get $out)
+    (local.get $mask)
+  )
+
+  ;; Rotates $size x $size matrix of i32 90 degrees clockwise
+  (func $detector_rotate (param $src i32) (param $dst i32) (param $size i32)
+    (local $i i32) (local $j i32) (local $src_idx i32) (local $dst_idx i32)
+    (local.set $i (i32.const 0))
+    (block $i_done
+      (loop $i_loop
+        (br_if $i_done (i32.ge_s (local.get $i) (local.get $size)))
+        (local.set $j (i32.const 0))
+        (block $j_done
+          (loop $j_loop
+            (br_if $j_done (i32.ge_s (local.get $j) (local.get $size)))
+            ;; dst[i][j] = src[size - j - 1][i]
+            (local.set $src_idx (i32.add (i32.mul (i32.sub (i32.sub (local.get $size) (local.get $j)) (i32.const 1)) (local.get $size)) (local.get $i)))
+            (local.set $dst_idx (i32.add (i32.mul (local.get $i) (local.get $size)) (local.get $j)))
+            (i32.store
+              (i32.add (local.get $dst) (i32.shl (local.get $dst_idx) (i32.const 2)))
+              (i32.load (i32.add (local.get $src) (i32.shl (local.get $src_idx) (i32.const 2))))
+            )
+            (local.set $j (i32.add (local.get $j) (i32.const 1)))
+            (br $j_loop)
+          )
+        )
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $i_loop)
+      )
+    )
   )
 
   ;; Main Pipeline Entrypoint: returns number of detected markers
@@ -1026,6 +1066,8 @@
     (local $rot i32) (local $bestId i32) (local $bestDist i32) (local $bestRot i32)
     (local $id i32) (local $hamming i32) (local $detCount i32) (local $outAddr i32) (local $cornerIdx i32)
     (local $dictCount i32) (local $codesPtr i32)
+    (local $markSize i32) (local $innerSize i32) (local $cellW i32) (local $minZero i32)
+    (local $srcRot i32) (local $dstRot i32) (local $tmpRot i32) (local $code64 i64)
 
     (if (i32.eqz (local.get $dictPtr))
       (then (local.set $dictPtr (global.get $activeDictPtr)))
@@ -1034,8 +1076,15 @@
       (then
         (local.set $dictCount (i32.load offset=12 (local.get $dictPtr)))
         (local.set $codesPtr (i32.add (local.get $dictPtr) (i32.const 16)))
+        (local.set $markSize (i32.load offset=4 (local.get $dictPtr)))
       )
     )
+    (if (i32.eqz (local.get $markSize))
+      (then (local.set $markSize (i32.const 6)))
+    )
+    (local.set $innerSize (i32.sub (local.get $markSize) (i32.const 2)))
+    (local.set $cellW (i32.div_u (i32.const 49) (local.get $markSize)))
+    (local.set $minZero (i32.shr_s (i32.mul (local.get $cellW) (local.get $cellW)) (i32.const 1)))
 
     (drop (call $ensureBuffers (local.get $w) (local.get $h)))
     (local.set $len (i32.mul (local.get $w) (local.get $h)))
@@ -1158,7 +1207,7 @@
       )
     )
 
-    ;; 4. Warp, Otsu threshold, verify border, decode 4x4 bits & match DICT_4X4_50
+    ;; 4. Warp, Otsu threshold, verify border, decode bits & match dictionary
     (local.set $i (i32.const 0))
     (block $candBreak
       (loop $candLoop
@@ -1169,20 +1218,20 @@
             (call $warpPerspective (global.get $greyPtr) (local.get $w) (local.get $h) (local.get $candAddr))
             (call $otsuAndThreshold)
 
-            ;; Check 1-cell black border (nz <= 32)
+            ;; Check 1-cell black border
             (local.set $borderOk (i32.const 1))
             (local.set $j (i32.const 0))
             (block $bBreak
               (loop $bLoop
-                (br_if $bBreak (i32.ge_u (local.get $j) (i32.const 6)))
-                (local.set $inc (select (i32.const 1) (i32.const 5) (i32.or (i32.eqz (local.get $j)) (i32.eq (local.get $j) (i32.const 5)))))
+                (br_if $bBreak (i32.ge_u (local.get $j) (local.get $markSize)))
+                (local.set $inc (select (i32.const 1) (i32.sub (local.get $markSize) (i32.const 1)) (i32.or (i32.eqz (local.get $j)) (i32.eq (local.get $j) (i32.sub (local.get $markSize) (i32.const 1))))))
                 (local.set $k (i32.const 0))
                 (loop $bkLoop
-                  (if (i32.gt_u (call $countCellNonZero (local.get $k) (local.get $j)) (i32.const 32))
+                  (if (i32.gt_u (call $countCellNonZero (local.get $k) (local.get $j) (local.get $cellW)) (local.get $minZero))
                     (then (local.set $borderOk (i32.const 0)) (br $bBreak))
                   )
                   (local.set $k (i32.add (local.get $k) (local.get $inc)))
-                  (br_if $bkLoop (i32.lt_u (local.get $k) (i32.const 6)))
+                  (br_if $bkLoop (i32.lt_u (local.get $k) (local.get $markSize)))
                 )
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (br $bLoop)
@@ -1191,41 +1240,55 @@
 
             (if (local.get $borderOk)
               (then
-                ;; Extract 16-bit code from inner 4x4 grid
-                (local.set $code (i32.const 0))
-                (local.set $j (i32.const 1))
+                ;; Extract inner bits into rot0 (at 20736)
+                (local.set $j (i32.const 0))
                 (loop $bitR
-                  (local.set $k (i32.const 1))
+                  (local.set $k (i32.const 0))
                   (loop $bitC
-                    (local.set $code
-                      (i32.or
-                        (i32.shl (local.get $code) (i32.const 1))
-                        (i32.gt_u (call $countCellNonZero (local.get $k) (local.get $j)) (i32.const 32))
+                    (i32.store
+                      (i32.add (i32.const 20736) (i32.shl (i32.add (i32.mul (local.get $j) (local.get $innerSize)) (local.get $k)) (i32.const 2)))
+                      (select
+                        (i32.const 1)
+                        (i32.const 0)
+                        (i32.gt_u
+                          (call $countCellNonZero
+                            (i32.add (local.get $k) (i32.const 1))
+                            (i32.add (local.get $j) (i32.const 1))
+                            (local.get $cellW)
+                          )
+                          (local.get $minZero)
+                        )
                       )
                     )
                     (local.set $k (i32.add (local.get $k) (i32.const 1)))
-                    (br_if $bitC (i32.le_u (local.get $k) (i32.const 4)))
+                    (br_if $bitC (i32.lt_u (local.get $k) (local.get $innerSize)))
                   )
                   (local.set $j (i32.add (local.get $j) (i32.const 1)))
-                  (br_if $bitR (i32.le_u (local.get $j) (i32.const 4)))
+                  (br_if $bitR (i32.lt_u (local.get $j) (local.get $innerSize)))
                 )
 
-                ;; Match across 4 rotations using hardware i32.popcnt
+                ;; Match across 4 rotations using hardware i64.popcnt
                 (local.set $bestId (i32.const -1))
                 (local.set $bestDist (i32.const 99))
+                (local.set $bestRot (i32.const 0))
+                (local.set $srcRot (i32.const 20736))
+                (local.set $dstRot (i32.const 20992))
                 (local.set $rot (i32.const 0))
                 (if (local.get $dictCount)
                   (then
                     (block $rotBreak
                       (loop $rotLoop
                         (br_if $rotBreak (i32.ge_u (local.get $rot) (i32.const 4)))
+                        (local.set $code64 (call $pack_bits_matrix (local.get $srcRot) (local.get $innerSize)))
                         (local.set $id (i32.const 0))
                         (loop $dictLoop
                           (local.set $hamming
-                            (i32.popcnt
-                              (i32.xor
-                                (local.get $code)
-                                (i32.load16_u (i32.add (local.get $codesPtr) (i32.shl (local.get $id) (i32.const 3))))
+                            (i32.wrap_i64
+                              (i64.popcnt
+                                (i64.xor
+                                  (local.get $code64)
+                                  (i64.load (i32.add (local.get $codesPtr) (i32.shl (local.get $id) (i32.const 3))))
+                                )
                               )
                             )
                           )
@@ -1240,7 +1303,10 @@
                           (br_if $dictLoop (i32.lt_u (local.get $id) (local.get $dictCount)))
                         )
                         (br_if $rotBreak (i32.eqz (local.get $bestDist)))
-                        (local.set $code (call $rotateCode4x4 (local.get $code)))
+                        (call $detector_rotate (local.get $srcRot) (local.get $dstRot) (local.get $innerSize))
+                        (local.set $tmpRot (local.get $srcRot))
+                        (local.set $srcRot (local.get $dstRot))
+                        (local.set $dstRot (local.get $tmpRot))
                         (local.set $rot (i32.add (local.get $rot) (i32.const 1)))
                         (br $rotLoop)
                       )
@@ -1255,7 +1321,7 @@
                     (i32.store offset=4 (local.get $outAddr) (local.get $bestDist))
                     (local.set $k (i32.const 0))
                     (loop $storeCorners
-                      (local.set $cornerIdx (i32.and (i32.add (local.get $k) (local.get $bestRot)) (i32.const 3)))
+                      (local.set $cornerIdx (i32.and (i32.sub (i32.add (local.get $k) (i32.const 4)) (local.get $bestRot)) (i32.const 3)))
                       (f32.store (i32.add (local.get $outAddr) (i32.add (i32.const 8) (i32.shl (local.get $k) (i32.const 3))))
                         (f32.convert_i32_s (i32.load (i32.add (local.get $candAddr) (i32.shl (local.get $cornerIdx) (i32.const 3)))))
                       )

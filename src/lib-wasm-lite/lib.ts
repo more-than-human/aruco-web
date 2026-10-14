@@ -233,7 +233,7 @@ export class Aruco4x4Detector {
 
     this.config = {
       dictionaryName: config?.dictionaryName ?? "4x4_1000",
-      limit: config?.limit ?? 50,
+      limit: config?.limit,
       maxHammingDistance: config?.maxHammingDistance ?? 1,
     };
     this.wasmSource = source;
