@@ -17,8 +17,8 @@ async function initCamera(): Promise<HTMLVideoElement> {
       facingMode: "environment",
       // using the "user" front camera
       // facingMode: "user",
-      width: 640,
-      height: 480,
+      width: 1280,
+      height: 720,
     },
   };
 
