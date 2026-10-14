@@ -8,8 +8,8 @@ const __dirname = path.dirname(__filename);
 
 async function compileWat() {
   const rootDir = path.resolve(__dirname, "..");
-  const watPath = path.resolve(rootDir, "src/wasm/aruco4x4.wat");
-  const wasmPath = path.resolve(rootDir, "src/wasm/aruco4x4.wasm");
+  const watPath = path.resolve(rootDir, "src/lib-wasm-lite/aruco4x4.wat");
+  const wasmPath = path.resolve(rootDir, "src/lib-wasm-lite/aruco4x4.wasm");
 
   const w = await wabt();
   const watSource = fs.readFileSync(watPath, "utf8");

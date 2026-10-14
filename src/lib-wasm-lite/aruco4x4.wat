@@ -1,15 +1,6 @@
 (module
   (memory (export "memory") 64)
 
-  ;; DICT_4X4_50 (50 x u16 = 100 bytes at 0x0000)
-  (data (i32.const 0)
-    "\32\b5\9a\0f\2d\33\46\99\9e\54\cd\79\2e\9e\f2\c4\da\fe\56\cf"
-    "\91\f9\a7\11\b7\0e\0f\2a\b1\24\3e\26\65\46\00\66\5e\6c\af\76"
-    "\8b\86\2b\b0\d5\cc\82\dd\47\fe\71\94\e4\ac\54\a5\23\21\6f\34"
-    "\15\44\b2\57\cf\9e\cb\f0\ae\08\29\09\75\18\ff\04\f6\0d\5a\1c"
-    "\18\17\28\2a\8c\32\b2\38\e8\24\eb\2e\3f\2d\64\4b\2e\50\13\50"
-  )
-
   ;; NEIGHBORHOOD dx (8 x i32 at 0x0080) and dy (8 x i32 at 0x00A0)
   (data (i32.const 128) "\01\00\00\00\01\00\00\00\00\00\00\00\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\00\00\00\00\01\00\00\00")
   (data (i32.const 160) "\00\00\00\00\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\ff\00\00\00\00\01\00\00\00\01\00\00\00\01\00\00\00")
@@ -26,6 +17,8 @@
   ;; 0xA100 (41216) : detected markers output (256 * 40 = 10240 bytes)
   ;; 0xC900 (51456) : dynamic heap base
 
+  (global $heap_ptr (mut i32) (i32.const 51456))
+  (global $activeDictPtr (mut i32) (i32.const 0))
   (global $lastW (mut i32) (i32.const 0))
   (global $lastH (mut i32) (i32.const 0))
   (global $rgbaPtr (mut i32) (i32.const 51456))
@@ -35,6 +28,128 @@
   (global $contourPtr (mut i32) (i32.const 0))
   (global $maxContourPts (mut i32) (i32.const 0))
 
+  (func $get_heap_ptr (export "get_heap_ptr") (result i32)
+    (global.get $heap_ptr)
+  )
+
+  (func $set_heap_ptr (export "set_heap_ptr") (param $ptr i32)
+    (global.set $heap_ptr (local.get $ptr))
+  )
+
+  (func $alloc (export "alloc") (param $size i32) (result i32)
+    (local $res i32)
+    (local $new_ptr i32)
+    (local $needed_pages i32)
+    (local.set $res (global.get $heap_ptr))
+    (local.set $new_ptr
+      (i32.and
+        (i32.add (i32.add (local.get $res) (local.get $size)) (i32.const 15))
+        (i32.const -16)
+      )
+    )
+    (if (i32.gt_u (local.get $new_ptr) (i32.shl (memory.size) (i32.const 16)))
+      (then
+        (local.set $needed_pages
+          (i32.sub
+            (i32.shr_u (i32.add (local.get $new_ptr) (i32.const 65535)) (i32.const 16))
+            (memory.size)
+          )
+        )
+        (drop (memory.grow (local.get $needed_pages)))
+      )
+    )
+    (global.set $heap_ptr (local.get $new_ptr))
+    (local.get $res)
+  )
+
+  (func $setDictionary (export "setDictionary") (param $dictPtr i32)
+    (global.set $activeDictPtr (local.get $dictPtr))
+  )
+
+  ;; Dictionary.calculateTau: calculates minimum Hamming distance between dictionary entries
+  (func $dict_calculate_tau (export "dict_calculate_tau") (param $dict_ptr i32) (result i32)
+    (local $count i32) (local $tau i32) (local $i i32) (local $j i32) (local $dist i32)
+    (local $c1 i64) (local $c2 i64) (local $codes_ptr i32)
+
+    (local.set $count (i32.load offset=12 (local.get $dict_ptr)))
+    (local.set $codes_ptr (i32.add (local.get $dict_ptr) (i32.const 16)))
+    (local.set $tau (i32.const 2147483647))
+
+    (local.set $i (i32.const 0))
+    (block $i_done
+      (loop $i_loop
+        (br_if $i_done (i32.ge_s (local.get $i) (local.get $count)))
+        (local.set $c1 (i64.load (i32.add (local.get $codes_ptr) (i32.shl (local.get $i) (i32.const 3)))))
+        (local.set $j (i32.add (local.get $i) (i32.const 1)))
+        (block $j_done
+          (loop $j_loop
+            (br_if $j_done (i32.ge_s (local.get $j) (local.get $count)))
+            (local.set $c2 (i64.load (i32.add (local.get $codes_ptr) (i32.shl (local.get $j) (i32.const 3)))))
+            (local.set $dist (i32.wrap_i64 (i64.popcnt (i64.xor (local.get $c1) (local.get $c2)))))
+            (if (i32.lt_s (local.get $dist) (local.get $tau))
+              (then (local.set $tau (local.get $dist)))
+            )
+            (local.set $j (i32.add (local.get $j) (i32.const 1)))
+            (br $j_loop)
+          )
+        )
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $i_loop)
+      )
+    )
+    (i32.store offset=8 (local.get $dict_ptr) (local.get $tau))
+    (local.get $tau)
+  )
+
+  ;; Dictionary.findBits: returns packed i64 ((distance << 32) | id), or -1 if no match < tau
+  (func $dict_find_bits (export "dict_find_bits") (param $dict_ptr i32) (param $bits_mask i64) (result i64)
+    (local $count i32) (local $tau i32) (local $i i32) (local $dist i32)
+    (local $best_id i32) (local $best_dist i32) (local $codes_ptr i32)
+
+    (local.set $tau (i32.load offset=8 (local.get $dict_ptr)))
+    (local.set $count (i32.load offset=12 (local.get $dict_ptr)))
+    (local.set $codes_ptr (i32.add (local.get $dict_ptr) (i32.const 16)))
+    (local.set $best_id (i32.const -1))
+    (local.set $best_dist (i32.const 2147483647))
+
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $loop
+        (br_if $done (i32.ge_s (local.get $i) (local.get $count)))
+        (local.set $dist
+          (i32.wrap_i64
+            (i64.popcnt
+              (i64.xor
+                (local.get $bits_mask)
+                (i64.load (i32.add (local.get $codes_ptr) (i32.shl (local.get $i) (i32.const 3))))
+              )
+            )
+          )
+        )
+        (if (i32.and (i32.lt_s (local.get $dist) (local.get $tau)) (i32.lt_s (local.get $dist) (local.get $best_dist)))
+          (then
+            (local.set $best_dist (local.get $dist))
+            (local.set $best_id (local.get $i))
+          )
+        )
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $loop)
+      )
+    )
+
+    (if (i32.ge_s (local.get $best_id) (i32.const 0))
+      (then
+        (return
+          (i64.or
+            (i64.shl (i64.extend_i32_u (local.get $best_dist)) (i64.const 32))
+            (i64.extend_i32_u (local.get $best_id))
+          )
+        )
+      )
+    )
+    (i64.const -1)
+  )
+
   (func $ensureBuffers (export "ensureBuffers") (param $w i32) (param $h i32) (result i32)
     (local $len i32)
     (local $binLen i32)
@@ -42,7 +157,7 @@
     (local $curBytes i32)
     (local $needPages i32)
 
-    (if (i32.and (i32.eq (local.get $w) (global.get $lastW)) (i32.eq (local.get $h) (global.get $lastH)))
+    (if (i32.and (i32.and (i32.eq (local.get $w) (global.get $lastW)) (i32.eq (local.get $h) (global.get $lastH))) (i32.eq (global.get $rgbaPtr) (global.get $heap_ptr)))
       (then (return (global.get $rgbaPtr)))
     )
 
@@ -51,8 +166,8 @@
     (local.set $len (i32.mul (local.get $w) (local.get $h)))
     (local.set $binLen (i32.mul (i32.add (local.get $w) (i32.const 2)) (i32.add (local.get $h) (i32.const 2))))
 
-    ;; Align all pointers to 16 bytes
-    (global.set $rgbaPtr (i32.const 51456))
+    ;; Align all pointers to 16 bytes starting above heap_ptr
+    (global.set $rgbaPtr (global.get $heap_ptr))
     (global.set $greyPtr (i32.and (i32.add (i32.add (global.get $rgbaPtr) (i32.shl (local.get $len) (i32.const 2))) (i32.const 15)) (i32.const -16)))
     (global.set $thresPtr (i32.and (i32.add (i32.add (global.get $greyPtr) (local.get $len)) (i32.const 15)) (i32.const -16)))
     (global.set $binaryPtr (i32.and (i32.add (i32.add (global.get $thresPtr) (local.get $len)) (i32.const 15)) (i32.const -16)))
@@ -902,7 +1017,7 @@
   )
 
   ;; Main Pipeline Entrypoint: returns number of detected markers
-  (func $detect (export "detect") (param $w i32) (param $h i32) (param $maxHamming i32) (result i32)
+  (func $detect (export "detect") (param $w i32) (param $h i32) (param $maxHamming i32) (param $dictPtr i32) (result i32)
     (local $len i32) (local $pos i32) (local $nbd i32) (local $i i32) (local $j i32) (local $k i32)
     (local $pix i32) (local $outer i32) (local $hole i32) (local $cLen i32) (local $minSize f64)
     (local $candCount i32) (local $candAddr i32) (local $candAddr2 i32)
@@ -910,6 +1025,17 @@
     (local $distSq i32) (local $borderOk i32) (local $inc i32) (local $code i32)
     (local $rot i32) (local $bestId i32) (local $bestDist i32) (local $bestRot i32)
     (local $id i32) (local $hamming i32) (local $detCount i32) (local $outAddr i32) (local $cornerIdx i32)
+    (local $dictCount i32) (local $codesPtr i32)
+
+    (if (i32.eqz (local.get $dictPtr))
+      (then (local.set $dictPtr (global.get $activeDictPtr)))
+    )
+    (if (local.get $dictPtr)
+      (then
+        (local.set $dictCount (i32.load offset=12 (local.get $dictPtr)))
+        (local.set $codesPtr (i32.add (local.get $dictPtr) (i32.const 16)))
+      )
+    )
 
     (drop (call $ensureBuffers (local.get $w) (local.get $h)))
     (local.set $len (i32.mul (local.get $w) (local.get $h)))
@@ -1088,30 +1214,37 @@
                 (local.set $bestId (i32.const -1))
                 (local.set $bestDist (i32.const 99))
                 (local.set $rot (i32.const 0))
-                (block $rotBreak
-                  (loop $rotLoop
-                    (br_if $rotBreak (i32.ge_u (local.get $rot) (i32.const 4)))
-                    (local.set $id (i32.const 0))
-                    (loop $dictLoop
-                      (local.set $hamming
-                        (i32.popcnt
-                          (i32.xor (local.get $code) (i32.load16_u (i32.shl (local.get $id) (i32.const 1))))
+                (if (local.get $dictCount)
+                  (then
+                    (block $rotBreak
+                      (loop $rotLoop
+                        (br_if $rotBreak (i32.ge_u (local.get $rot) (i32.const 4)))
+                        (local.set $id (i32.const 0))
+                        (loop $dictLoop
+                          (local.set $hamming
+                            (i32.popcnt
+                              (i32.xor
+                                (local.get $code)
+                                (i32.load16_u (i32.add (local.get $codesPtr) (i32.shl (local.get $id) (i32.const 3))))
+                              )
+                            )
+                          )
+                          (if (i32.and (i32.le_s (local.get $hamming) (local.get $maxHamming)) (i32.lt_s (local.get $hamming) (local.get $bestDist)))
+                            (then
+                              (local.set $bestId (local.get $id))
+                              (local.set $bestDist (local.get $hamming))
+                              (local.set $bestRot (local.get $rot))
+                            )
+                          )
+                          (local.set $id (i32.add (local.get $id) (i32.const 1)))
+                          (br_if $dictLoop (i32.lt_u (local.get $id) (local.get $dictCount)))
                         )
+                        (br_if $rotBreak (i32.eqz (local.get $bestDist)))
+                        (local.set $code (call $rotateCode4x4 (local.get $code)))
+                        (local.set $rot (i32.add (local.get $rot) (i32.const 1)))
+                        (br $rotLoop)
                       )
-                      (if (i32.and (i32.le_s (local.get $hamming) (local.get $maxHamming)) (i32.lt_s (local.get $hamming) (local.get $bestDist)))
-                        (then
-                          (local.set $bestId (local.get $id))
-                          (local.set $bestDist (local.get $hamming))
-                          (local.set $bestRot (local.get $rot))
-                        )
-                      )
-                      (local.set $id (i32.add (local.get $id) (i32.const 1)))
-                      (br_if $dictLoop (i32.lt_u (local.get $id) (i32.const 50)))
                     )
-                    (br_if $rotBreak (i32.eqz (local.get $bestDist)))
-                    (local.set $code (call $rotateCode4x4 (local.get $code)))
-                    (local.set $rot (i32.add (local.get $rot) (i32.const 1)))
-                    (br $rotLoop)
                   )
                 )
 

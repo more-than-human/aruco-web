@@ -16,7 +16,6 @@ interface IBenchmarkDetector {
  * Adapter for Aruco4x4Detector (from lib-wasm-lite).
  * Adapts input (ImageData) and converts output DetectedMarker format
  * into the standard format { id, corners, hammingDistance }.
- * Handles dictionary constraints (hardcoded 4x4_50 in lib-wasm-lite).
  */
 class Aruco4x4Adapter implements IBenchmarkDetector {
   private detector: Aruco4x4Detector;
@@ -114,7 +113,10 @@ async function runBenchmark() {
   try {
     if (statusEl) statusEl.textContent = "Loading WebAssembly modules...";
     await initArUcoWasm(arucoWatBytes);
-    const liteDetector = new Aruco4x4Detector();
+    const liteDetector = new Aruco4x4Detector({
+      dictionaryName: "6x6_1000",
+      maxHammingDistance: 2,
+    });
     await liteDetector.init();
     const liteAdapter = new Aruco4x4Adapter(liteDetector, 2);
 
@@ -136,15 +138,15 @@ async function runBenchmark() {
 
     if (statusEl) statusEl.textContent = "Running TypeScript benchmark...";
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const tsMetrics = runBenchmarkOnDetector("TypeScript (6x6_1000)", () => tsDetector.detect(imageData), 50);
+    const tsMetrics = runBenchmarkOnDetector("TypeScript", () => tsDetector.detect(imageData), 50);
 
     if (statusEl) statusEl.textContent = "Running WASM benchmark...";
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const wasmMetrics = runBenchmarkOnDetector("WebAssembly SIMD (6x6_1000)", () => wasmDetector.detect(imageData), 50);
+    const wasmMetrics = runBenchmarkOnDetector("WebAssembly SIMD", () => wasmDetector.detect(imageData), 50);
 
     if (statusEl) statusEl.textContent = "Running WASM Lite benchmark...";
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const liteMetrics = runBenchmarkOnDetector("WebAssembly Lite SIMD (4x4_50)", () => liteAdapter.detect(imageData), 50);
+    const liteMetrics = runBenchmarkOnDetector("WebAssembly Lite SIMD", () => liteAdapter.detect(imageData), 50);
 
     if (statusEl) statusEl.textContent = "Benchmark complete!";
 
