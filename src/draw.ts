@@ -46,8 +46,6 @@ window.addEventListener("load", async () => {
     detector: wasmDetector,
   });
 
-  setupEngineSelector(tracker, wasmDetector);
-
   await initCamera(video);
   await setupCameraSelector(video, tracker);
 
@@ -64,7 +62,6 @@ function startDetectionLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement, 
     const markers = tracker.detect(imageData, performance.now());
 
     drawCorners(ctx, markers);
-    updateStatusBadge(tracker, markers);
     requestAnimationFrame(update);
   };
 
@@ -94,22 +91,6 @@ function drawCorners(ctx: CanvasRenderingContext2D, markers: (Marker | TrackedMa
   }
 
   ctx.restore();
-}
-
-function updateStatusBadge(tracker: Tracker, markers?: (Marker | TrackedMarker)[]): void {
-  const statsEl = document.getElementById("tracker-stats");
-  if (!statsEl) return;
-
-  const activeCount = tracker.activeTracksCount;
-  const coastingCount = markers ? markers.filter((m) => m instanceof TrackedMarker && m.isPredicted).length : 0;
-
-  if (coastingCount > 0) {
-    statsEl.textContent = `Kalman: ${activeCount} (${coastingCount} coasting)`;
-    statsEl.style.color = "#ef6c00";
-  } else {
-    statsEl.textContent = `Kalman: ${activeCount} active`;
-    statsEl.style.color = "#2e7d32";
-  }
 }
 
 // --- Camera & Stream Management ---
@@ -180,26 +161,4 @@ async function setupCameraSelector(videoElement: HTMLVideoElement, tracker: Trac
   } catch (err) {
     console.error("Error enumerating devices:", err);
   }
-}
-
-// --- Engine Controls ---
-function setupEngineSelector(tracker: Tracker, wasmDetector: WasmDetector | null): void {
-  const engineSelect = document.getElementById("engine-select") as HTMLSelectElement | null;
-  if (!engineSelect) return;
-
-  if (!wasmDetector) {
-    const wasmOption = engineSelect.querySelector<HTMLOptionElement>('option[value="wasm"]');
-    if (wasmOption) {
-      wasmOption.disabled = true;
-      wasmOption.text += " (Not Supported / Failed to load)";
-    }
-    engineSelect.value = "ts";
-  }
-
-  engineSelect.addEventListener("change", () => {
-    if (wasmDetector) {
-      tracker.setDetector(wasmDetector);
-    }
-    console.log(`Switched engine to: ${engineSelect.value}`);
-  });
 }
