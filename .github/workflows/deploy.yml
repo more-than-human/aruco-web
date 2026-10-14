@@ -1,0 +1,47 @@
+name: Deploy static content to Pages
+
+on:
+  push:
+    branches: ["master"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+jobs:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          fetch-tags: false
+          lfs: false
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
+      - name: npm install, build, and test
+        run: |
+          npm install
+          npm run build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: "dist"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
