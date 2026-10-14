@@ -25,6 +25,7 @@ function watPlugin(): Plugin {
         multi_value: true,
         sat_float_to_int: true,
         sign_extension: true,
+        bulk_memory: true,
       });
       const binary = parsed.toBinary({ log: false, write_debug_names: false });
       const base64 = Buffer.from(binary.buffer).toString("base64");

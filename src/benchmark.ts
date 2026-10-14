@@ -1,7 +1,44 @@
 import benchImageSrc from "../benchmark/bench-01.jpg";
+import { Aruco4x4Detector } from "./lib-wasm-lite/lib";
+import type { DetectedMarker as LiteDetectedMarker } from "./lib-wasm-lite/types";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm";
-import { Detector as TsDetector } from "./lib/aruco";
+import { Detector as TsDetector, Marker as TsMarker } from "./lib/aruco";
+
+/**
+ * Common detector interface for benchmarking.
+ */
+interface IBenchmarkDetector {
+  detect(imageData: ImageData): any[];
+}
+
+/**
+ * Adapter for Aruco4x4Detector (from lib-wasm-lite).
+ * Adapts input (ImageData) and converts output DetectedMarker format
+ * into the standard format { id, corners, hammingDistance }.
+ * Handles dictionary constraints (hardcoded 4x4_50 in lib-wasm-lite).
+ */
+class Aruco4x4Adapter implements IBenchmarkDetector {
+  private detector: Aruco4x4Detector;
+  private maxHammingDistance: number;
+
+  constructor(detector: Aruco4x4Detector, maxHammingDistance = 2) {
+    this.detector = detector;
+    this.maxHammingDistance = maxHammingDistance;
+  }
+
+  detect(imageData: ImageData): TsMarker[] {
+    const rawMarkers: LiteDetectedMarker[] = this.detector.detect(imageData, this.maxHammingDistance);
+    return rawMarkers.map(
+      (m) =>
+        new TsMarker(
+          m.id,
+          m.corners.map((c) => ({ x: c.x, y: c.y })),
+          m.distance,
+        ),
+    );
+  }
+}
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -75,8 +112,11 @@ async function runBenchmark() {
   const resultsEl = document.getElementById("results");
 
   try {
-    if (statusEl) statusEl.textContent = "Loading WebAssembly module...";
+    if (statusEl) statusEl.textContent = "Loading WebAssembly modules...";
     await initArUcoWasm(arucoWatBytes);
+    const liteDetector = new Aruco4x4Detector();
+    await liteDetector.init();
+    const liteAdapter = new Aruco4x4Adapter(liteDetector, 2);
 
     if (statusEl) statusEl.textContent = "Loading bench-01.jpg...";
     const img = await loadImage(benchImageSrc);
@@ -96,17 +136,23 @@ async function runBenchmark() {
 
     if (statusEl) statusEl.textContent = "Running TypeScript benchmark...";
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const tsMetrics = runBenchmarkOnDetector("TypeScript", () => tsDetector.detect(imageData), 50);
+    const tsMetrics = runBenchmarkOnDetector("TypeScript (6x6_1000)", () => tsDetector.detect(imageData), 50);
 
     if (statusEl) statusEl.textContent = "Running WASM benchmark...";
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const wasmMetrics = runBenchmarkOnDetector("WebAssembly (SIMD)", () => wasmDetector.detect(imageData), 50);
+    const wasmMetrics = runBenchmarkOnDetector("WebAssembly SIMD (6x6_1000)", () => wasmDetector.detect(imageData), 50);
+
+    if (statusEl) statusEl.textContent = "Running WASM Lite benchmark...";
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const liteMetrics = runBenchmarkOnDetector("WebAssembly Lite SIMD (4x4_50)", () => liteAdapter.detect(imageData), 50);
 
     if (statusEl) statusEl.textContent = "Benchmark complete!";
 
-    const speedup = tsMetrics.avgLatency / wasmMetrics.avgLatency;
+    const speedupWasm = tsMetrics.avgLatency / wasmMetrics.avgLatency;
+    const speedupLite = tsMetrics.avgLatency / liteMetrics.avgLatency;
 
     if (resultsEl) {
+      const allMetrics = [liteMetrics, wasmMetrics, tsMetrics];
       resultsEl.innerHTML = `
         <h2>Benchmark Results (bench-01.jpg: ${imageData.width}x${imageData.height})</h2>
         <table border="1" cellpadding="6" style="border-collapse: collapse;">
@@ -123,37 +169,35 @@ async function runBenchmark() {
             </tr>
           </thead>
           <tbody>
+            ${allMetrics
+              .map(
+                (m) => `
             <tr>
-              <td><strong>${wasmMetrics.name}</strong></td>
-              <td>${wasmMetrics.iterations}</td>
-              <td>${wasmMetrics.markersCount}</td>
-              <td>${wasmMetrics.avgLatency.toFixed(2)} ms</td>
-              <td>${wasmMetrics.minLatency.toFixed(2)} ms</td>
-              <td>${wasmMetrics.maxLatency.toFixed(2)} ms</td>
-              <td><strong>${wasmMetrics.avgFps.toFixed(2)} FPS</strong></td>
-              <td>${wasmMetrics.totalTime.toFixed(2)} ms</td>
-            </tr>
-            <tr>
-              <td><strong>${tsMetrics.name}</strong></td>
-              <td>${tsMetrics.iterations}</td>
-              <td>${tsMetrics.markersCount}</td>
-              <td>${tsMetrics.avgLatency.toFixed(2)} ms</td>
-              <td>${tsMetrics.minLatency.toFixed(2)} ms</td>
-              <td>${tsMetrics.maxLatency.toFixed(2)} ms</td>
-              <td><strong>${tsMetrics.avgFps.toFixed(2)} FPS</strong></td>
-              <td>${tsMetrics.totalTime.toFixed(2)} ms</td>
-            </tr>
+              <td><strong>${m.name}</strong></td>
+              <td>${m.iterations}</td>
+              <td>${m.markersCount}</td>
+              <td>${m.avgLatency.toFixed(2)} ms</td>
+              <td>${m.minLatency.toFixed(2)} ms</td>
+              <td>${m.maxLatency.toFixed(2)} ms</td>
+              <td><strong>${m.avgFps.toFixed(2)} FPS</strong></td>
+              <td>${m.totalTime.toFixed(2)} ms</td>
+            </tr>`,
+              )
+              .join("")}
           </tbody>
         </table>
-        <p><strong>WASM Speedup:</strong> ${speedup.toFixed(2)}x faster</p>
+        <p><strong>WASM (SIMD) Speedup over TS:</strong> ${speedupWasm.toFixed(2)}x faster</p>
+        <p><strong>WASM Lite Speedup over TS:</strong> ${speedupLite.toFixed(2)}x faster</p>
       `;
     }
 
     console.log("Benchmark Results:", {
       imageSize: `${imageData.width}x${imageData.height}`,
+      wasmLite: liteMetrics,
       wasm: wasmMetrics,
       typescript: tsMetrics,
-      speedup: `${speedup.toFixed(2)}x`,
+      speedupWasm: `${speedupWasm.toFixed(2)}x`,
+      speedupLite: `${speedupLite.toFixed(2)}x`,
     });
   } catch (error) {
     if (statusEl) statusEl.textContent = `Error: ${error}`;

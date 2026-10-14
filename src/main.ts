@@ -53,7 +53,8 @@ window.addEventListener("load", async () => {
   try {
     await initArUcoWasm(arucoWatBytes);
     wasmDetector = new WasmDetector({
-      dictionaryName: "6x6_1000",
+      dictionaryName: "4x4_1000",
+      limit: 50,
       maxHammingDistance: 2,
     });
   } catch (err) {
@@ -62,7 +63,8 @@ window.addEventListener("load", async () => {
   }
 
   tsDetector = new TsDetector({
-    dictionaryName: "6x6_1000",
+    dictionaryName: "4x4_1000",
+    limit: 50,
     maxHammingDistance: 2,
   });
 
