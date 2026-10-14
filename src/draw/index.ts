@@ -61,6 +61,7 @@ export class PaperDigitizer {
   }
 
   public reset(): void {
+    this.geometry.reset();
     this.temporalFilter.reset();
   }
 }

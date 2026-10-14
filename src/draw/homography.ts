@@ -18,6 +18,7 @@ export class PaperGeometry {
   private screenWidth: number;
   private screenHeight: number;
   private markerMarginRatio: number;
+  private lastKnownMarkers = new Map<number, Marker | TrackedMarker>();
 
   public static readonly PAPER_WIDTH_MM = LETTER_LANDSCAPE_WIDTH_MM;
   public static readonly PAPER_HEIGHT_MM = LETTER_LANDSCAPE_HEIGHT_MM;
@@ -41,10 +42,17 @@ export class PaperGeometry {
   }
 
   public computeWarpModel(markers: (Marker | TrackedMarker)[]): PaperWarpModel | null {
-    const m1 = markers.find((m) => m.id === 0);
-    const m2 = markers.find((m) => m.id === 1);
-    const m3 = markers.find((m) => m.id === 2);
-    const m4 = markers.find((m) => m.id === 3);
+    // Update last known locations with currently detected/available markers (IDs 0..3)
+    for (const m of markers) {
+      if (m.id >= 0 && m.id <= 3 && m.corners && m.corners.length === 4) {
+        this.lastKnownMarkers.set(m.id, m);
+      }
+    }
+
+    const m1 = this.lastKnownMarkers.get(0);
+    const m2 = this.lastKnownMarkers.get(1);
+    const m3 = this.lastKnownMarkers.get(2);
+    const m4 = this.lastKnownMarkers.get(3);
 
     if (!m1 || !m2 || !m3 || !m4) {
       return null;
@@ -249,5 +257,9 @@ export class PaperGeometry {
     const w = H[6] * x + H[7] * y + H[8];
     const invW = w !== 0 ? 1.0 / w : 1.0;
     return [(H[0] * x + H[1] * y + H[2]) * invW, (H[3] * x + H[4] * y + H[5]) * invW];
+  }
+
+  public reset(): void {
+    this.lastKnownMarkers.clear();
   }
 }
