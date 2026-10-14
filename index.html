@@ -15,6 +15,11 @@
         <option value="wasm" selected>WebAssembly (SIMD)</option>
         <option value="ts">TypeScript</option>
       </select>
+      <label for="tracking-toggle" style="margin-left: 12px; cursor: pointer; user-select: none;">
+        <input type="checkbox" id="tracking-toggle" checked style="vertical-align: middle; margin-right: 4px;" />
+        Kalman Tracker
+      </label>
+      <span id="tracker-stats" style="margin-left: 12px; font-weight: bold; font-size: 13px;"></span>
     </div>
 
     <div id="app">

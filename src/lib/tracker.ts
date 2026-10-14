@@ -1,5 +1,15 @@
 import { Detector, Marker, type IConfig, type IImage, type IPoint } from "./aruco";
 
+export interface IMarkerLike {
+  id: number;
+  corners: IPoint[];
+  hammingDistance: number;
+}
+
+export interface IMarkerDetector {
+  detect(image: IImage | ImageData | { width: number; height: number; data: Uint8ClampedArray | Uint8Array }): (Marker | IMarkerLike)[];
+}
+
 export interface ITrackerConfig extends IConfig {
   /**
    * How many consecutive dropped frames a marker can be predicted
@@ -34,7 +44,7 @@ export interface ITrackerConfig extends IConfig {
   /**
    * Optional pre-instantiated Detector. If not provided, Tracker creates its own.
    */
-  detector?: Detector;
+  detector?: IMarkerDetector;
 }
 
 /**
@@ -335,7 +345,7 @@ export class Tracker {
   > &
     ITrackerConfig;
 
-  public readonly detector: Detector;
+  public detector: IMarkerDetector;
   private readonly filters: Map<number, MarkerKalmanFilter>;
   private lastFrameTimestamp: number | null = null;
   private streamConfig: any;
@@ -356,15 +366,29 @@ export class Tracker {
   }
 
   /**
+   * Sets or swaps the active underlying detector engine (e.g. WASM SIMD or TypeScript).
+   */
+  public setDetector(detector: IMarkerDetector): void {
+    this.detector = detector;
+  }
+
+  /**
+   * Returns the count of actively tracked markers (both detected and coasting).
+   */
+  public get activeTracksCount(): number {
+    return this.filters.size;
+  }
+
+  /**
    * Detects and tracks markers in an image frame.
    * Returns TrackedMarker[] which is a subclass of Marker[] (100% compatible with Detector.detect).
    *
    * @param image IImage or ImageData-like object ({ width, height, data })
    * @param timestampMs Optional monotonic timestamp in milliseconds to compute variable dt
    */
-  public detect(image: IImage, timestampMs?: number): TrackedMarker[] {
-    const rawMarkers = this.detector.detect(image);
-    return this.updateWithDetections(rawMarkers, timestampMs);
+  public detect(image: IImage | ImageData | { width: number; height: number; data: Uint8ClampedArray | Uint8Array }, timestampMs?: number): TrackedMarker[] {
+    const rawMarkers = this.detector.detect(image as any);
+    return this.updateWithDetections(rawMarkers as Marker[], timestampMs);
   }
 
   /**
@@ -385,19 +409,28 @@ export class Tracker {
    * Updates internal Kalman Filters given a list of raw Marker detections from a frame.
    * Useful if Detector.detect() is called externally (e.g. in a Web Worker).
    */
-  public updateWithDetections(rawMarkers: Marker[], timestampMs?: number): TrackedMarker[] {
+  public updateWithDetections(rawMarkers: (Marker | IMarkerLike)[], timestampMs?: number): TrackedMarker[] {
     // Compute step time delta (dt)
     let dt = this.config.fixedDt;
     if (timestampMs !== undefined) {
       if (this.lastFrameTimestamp !== null && timestampMs > this.lastFrameTimestamp) {
-        // Normalize milliseconds to ~60fps frame units (16.667ms = 1.0 unit) so noise parameters stay scale-invariant
-        dt = (timestampMs - this.lastFrameTimestamp) / (1000.0 / 60.0);
+        const elapsed = timestampMs - this.lastFrameTimestamp;
+        // If elapsed time is huge (> 1 sec, e.g. tab backgrounded), clamp dt to fixedDt
+        if (elapsed > 1000.0) {
+          dt = this.config.fixedDt;
+        } else {
+          // Normalize milliseconds to ~60fps frame units (16.667ms = 1.0 unit) so noise parameters stay scale-invariant
+          dt = elapsed / (1000.0 / 60.0);
+        }
       }
       this.lastFrameTimestamp = timestampMs;
     }
+    if (dt <= 0 || !Number.isFinite(dt)) {
+      dt = this.config.fixedDt;
+    }
 
     // Group detections by marker ID (if multiple markers share an ID, pick lowest hamming distance)
-    const detectedById = new Map<number, Marker>();
+    const detectedById = new Map<number, Marker | IMarkerLike>();
     for (let i = 0; i < rawMarkers.length; ++i) {
       const m = rawMarkers[i];
       const existing = detectedById.get(m.id);
