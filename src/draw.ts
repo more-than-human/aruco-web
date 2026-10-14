@@ -61,8 +61,8 @@ window.addEventListener("load", async () => {
       windowSize: 31,
     },
     temporal: {
-      motionThreshold: 16, // Tolerant to residual jitter
-      requiredStableFrames: 4, // Faster ink confirmation
+      motionThreshold: 100, // Tolerant to residual jitter
+      requiredStableFrames: 1, // Faster ink confirmation
       blendAlpha: 0.6,
     },
   });

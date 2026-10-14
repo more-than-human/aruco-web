@@ -36,42 +36,37 @@ html {
 
   width: 100%;
   height: 100%;
-  background-color: #000;
-}
-
-#video {
-  position: absolute;
-  top: 0;
-  left: 0;
-
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: contain;
-}
-
-#canvas {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 100;
-
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: contain;
+  background-color: #ffffff;
 }
 
 #paper-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+  background-color: #ffffff;
+}
+
+#video {
+  display: none;
+}
+
+#canvas {
   position: absolute;
   right: 10px;
   bottom: 10px;
   z-index: 200;
   width: 240px;
-  height: 340px;
-  aspect-ratio: 1 / 1.4142;
+  height: auto;
+  aspect-ratio: 4 / 3;
   border: 2px solid rgba(255, 255, 255, 0.8);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  background: #ffffff;
+  transform: scaleX(-1);
+  object-fit: cover;
 }

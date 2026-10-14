@@ -21,7 +21,7 @@ export class PaperGeometry {
   private outwardPaddingRatio: number;
   private markerMarginRatio: number;
 
-  constructor(screenWidth: number, screenHeight: number, outwardPaddingRatio = 1.0, markerMarginRatio = 0.1) {
+  constructor(screenWidth: number, screenHeight: number, outwardPaddingRatio = 1.0, markerMarginRatio = 0.2) {
     this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
     this.outwardPaddingRatio = outwardPaddingRatio;
@@ -29,7 +29,7 @@ export class PaperGeometry {
   }
 
   public computeWarpModel(markers: (Marker | TrackedMarker)[]): PaperWarpModel | null {
-    // 1. Validate Markers: Ensure markers 0, 1, 2, 3 are all present and none are coasting
+    // 1. Validate Markers: Ensure markers 0, 1, 2, 3 are all present (coasting markers are accepted)
     const m0 = markers.find((m) => m.id === 0);
     const m1 = markers.find((m) => m.id === 1);
     const m2 = markers.find((m) => m.id === 2);
@@ -40,11 +40,6 @@ export class PaperGeometry {
     }
 
     const markerList = [m0, m1, m2, m3];
-    for (const m of markerList) {
-      if (m instanceof TrackedMarker && m.isPredicted) {
-        return null;
-      }
-    }
 
     // Marker Centers:
     // Averaging 4 corners gives a much more stable position than individual jittery corners
