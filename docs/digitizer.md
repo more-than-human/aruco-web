@@ -55,20 +55,22 @@ The system processes each frame through 4 decoupled stages:
 
 ## 3. Coordinate Systems & Marker Layout
 
-### 3.1 Physical Marker Layout & Outer Corners
+### 3.1 Physical Marker Layout & Centers as Source of Truth
 
-Because all markers have fixed orientation, the 4 outer corners defining the base quad of the marker layout are deterministic:
+To eliminate jitter caused by individual noisy corner detections, the 4 marker centers (centroids) serve as the source of truth for tracking and perspective calculation:
 
-- **Top-Left Marker (`id = 0`):** Outer corner is `corners[0]` (TL)
-- **Top-Right Marker (`id = 1`):** Outer corner is `corners[1]` (TR)
-- **Bottom-Right Marker (`id = 3`):** Outer corner is `corners[2]` (BR)
-- **Bottom-Left Marker (`id = 2`):** Outer corner is `corners[3]` (BL)
+$$C = \frac{1}{4} \sum_{i=0}^3 \text{corner}_i$$
 
-### 3.2 Paper Boundary ($0.5 \times D$ Outward Expansion) & Marker Mask ($0.1 \times D$ Expansion)
+- **Top-Left Marker (`id = 0`):** Center $C_0$
+- **Top-Right Marker (`id = 1`):** Center $C_1$
+- **Bottom-Left Marker (`id = 2`):** Center $C_2$
+- **Bottom-Right Marker (`id = 3`):** Center $C_3$
 
-Let $D_u, D_v$ be the normalized marker width and height in rectified space (measured as a fraction of the distance between the outer corners).
+### 3.2 Paper Boundary ($1.0 \times D$ Outward Padding from Centers) & Marker Mask ($0.1 \times D$ Expansion)
 
-- **Full Paper Viewport:** Expands outward by $0.5 \times D$ beyond the 4 outer corners.
+Let $D_u, D_v$ be the normalized marker width and height in rectified space (measured relative to the center-to-center spans).
+
+- **Full Paper Viewport:** Expands outward by $1.0 \times D$ beyond the marker centers ($0.5 \times D$ from center to marker edge $+ 0.5 \times D$ margin beyond the marker edge).
 - **No-Draw Marker Zones:** Each marker's bounding box in screen space is expanded outward by $0.1 \times D$ on all 4 sides (total box size $= 1.2 \times D$). Pixels inside these 4 boxes are masked out (`validMask[i] = 0`).
 
 ---
@@ -114,25 +116,26 @@ export interface RectifiedFrame {
 
 ### Stage 1: `PaperGeometry` (`src/lib/digitizer/homography.ts`)
 
-**Responsibility:** Given the 4 tracked markers (`id = 0, 1, 2, 3`), compute the perspective transformation between the rectified screen canvas (`width × height`) and the camera image, accounting for the $0.5 \times D$ outward paper margin and the $0.1 \times D$ marker exclusion zones.
+**Responsibility:** Given the 4 tracked markers (`id = 0, 1, 2, 3`), compute the perspective transformation between the rectified screen canvas (`width × height`) and the camera image, accounting for the $1.0 \times D$ outward paper margin from marker centers and the $0.1 \times D$ marker exclusion zones.
 
 #### Algorithm
 
 1. **Validate Markers:** Ensure markers `0, 1, 2, 3` are all present and none are coasting (`isPredicted === false`). If any marker is missing or coasting, return `null` (downstream holds the previous canvas).
-2. **Estimate Normalized Marker Size ($D_u, D_v$):**
-   - In camera space, compute the average ratio of marker edge length to outer-quad span:
-     $$r_u = \frac{1}{2}\left(\frac{\|M_0[1] - M_0[0]\|}{\|M_1[1] - M_0[0]\|} + \frac{\|M_2[2] - M_2[3]\|}{\|M_3[2] - M_2[3]\|}\right)$$
-     $$r_v = \frac{1}{2}\left(\frac{\|M_0[3] - M_0[0]\|}{\|M_2[3] - M_0[0]\|} + \frac{\|M_1[2] - M_1[1]\|}{\|M_3[2] - M_1[1]\|}\right)$$
-3. **Map Outer Corners directly to Inset Screen Coordinates:**
-   - Since the full screen (`[0, W] × [0, H]`) includes a $0.5 \times D$ margin outside the outer corners on all sides, the total span of the screen in units of the outer-corner quad is $1 + 2(0.5 r) = 1 + r$.
-   - Therefore, the 4 outer corners (`M0[0], M1[1], M3[2], M2[3]`) map directly to the inset screen rectangle:
-     - $u_{min} = W \cdot \frac{0.5 r_u}{1 + r_u}, \quad u_{max} = W - u_{min}$
-     - $v_{min} = H \cdot \frac{0.5 r_v}{1 + r_v}, \quad v_{max} = H - v_{min}$
+2. **Compute Marker Centers & Normalized Marker Size ($D_u, D_v$):**
+   - For each marker, compute centroid $C = \frac{1}{4} \sum_{i=0}^3 \text{corner}_i$.
+   - In camera space, compute the average ratio of marker edge length to center-to-center span:
+     $$r_u = \frac{1}{2}\left(\frac{\|M_0[1] - M_0[0]\|}{\|C_1 - C_0\|} + \frac{\|M_2[2] - M_2[3]\|}{\|C_3 - C_2\|}\right)$$
+     $$r_v = \frac{1}{2}\left(\frac{\|M_0[3] - M_0[0]\|}{\|C_2 - C_0\|} + \frac{\|M_1[2] - M_1[1]\|}{\|C_3 - C_1\|}\right)$$
+3. **Map Marker Centers directly to Inset Screen Coordinates:**
+   - Since the full screen (`[0, W] × [0, H]`) includes a $1.0 \times D$ margin outside the marker centers on all sides, the total span of the screen in units of the center span is $1 + 2(1.0 r) = 1 + 2r$.
+   - Therefore, the 4 marker centers ($C_0, C_1, C_3, C_2$) map directly to the inset screen rectangle:
+     - $u_{min} = W \cdot \frac{r_u}{1 + 2 r_u}, \quad u_{max} = W - u_{min}$
+     - $v_{min} = H \cdot \frac{r_v}{1 + 2 r_v}, \quad v_{max} = H - v_{min}$
    - Solve the 4-point Direct Linear Transform (DLT) homography `screenToCameraH` mapping:
-     - $(u_{min}, v_{min}) \rightarrow M_0.\text{corners}[0]$
-     - $(u_{max}, v_{min}) \rightarrow M_1.\text{corners}[1]$
-     - $(u_{max}, v_{max}) \rightarrow M_3.\text{corners}[2]$
-     - $(u_{min}, v_{max}) \rightarrow M_2.\text{corners}[3]$
+     - $(u_{min}, v_{min}) \rightarrow C_0$
+     - $(u_{max}, v_{min}) \rightarrow C_1$
+     - $(u_{max}, v_{max}) \rightarrow C_3$
+     - $(u_{min}, v_{max}) \rightarrow C_2$
 4. **Compute Marker Exclusion Boxes ($+0.1 \times D$):**
    - Invert `screenToCameraH` to get `cameraToScreenH`.
    - Project all 4 corners of each marker into screen space, take their bounding box `[minX, minY, maxX, maxY]`, and expand each side outward by $0.1 \times (\text{boxWidth}, \text{boxHeight})$.
@@ -144,7 +147,7 @@ export class PaperGeometry {
   constructor(
     private screenWidth: number,
     private screenHeight: number,
-    private outwardPaddingRatio = 0.5,
+    private outwardPaddingRatio = 1.0,
     private markerMarginRatio = 0.1,
   ) {}
 

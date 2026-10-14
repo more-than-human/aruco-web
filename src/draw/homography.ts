@@ -6,7 +6,8 @@ import type { IRect, PaperWarpModel } from "./types.ts";
  * Stage 1: PaperGeometry
  * Given the 4 tracked markers (id = 0, 1, 2, 3), computes the perspective
  * transformation between screen canvas (width x height, assumed portrait A4)
- * and camera image, accounting for 0.5xD outward paper margin and 0.1xD marker exclusion zones.
+ * and camera image, accounting for 1.0xD outward paper margin from marker centers
+ * and 0.1xD marker exclusion zones.
  *
  * Markers are assumed placed on the paper with portrait orientation:
  * - Marker 0: Top-Left
@@ -20,7 +21,7 @@ export class PaperGeometry {
   private outwardPaddingRatio: number;
   private markerMarginRatio: number;
 
-  constructor(screenWidth: number, screenHeight: number, outwardPaddingRatio = 0.5, markerMarginRatio = 0.1) {
+  constructor(screenWidth: number, screenHeight: number, outwardPaddingRatio = 1.0, markerMarginRatio = 0.1) {
     this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
     this.outwardPaddingRatio = outwardPaddingRatio;
@@ -45,25 +46,28 @@ export class PaperGeometry {
       }
     }
 
-    // Outer corners:
-    // Top-Left (id=0): corners[0] (TL)
-    // Top-Right (id=1): corners[1] (TR)
-    // Bottom-Left (id=2): corners[3] (BL)
-    // Bottom-Right (id=3): corners[2] (BR)
-    const p0 = m0.corners[0]; // M0 TL
-    const p1 = m1.corners[1]; // M1 TR
-    const p2 = m2.corners[3]; // M2 BL
-    const p3 = m3.corners[2]; // M3 BR
+    // Marker Centers:
+    // Averaging 4 corners gives a much more stable position than individual jittery corners
+    const getCenter = (m: Marker | TrackedMarker): IPoint => {
+      const c = m.corners;
+      return {
+        x: (c[0].x + c[1].x + c[2].x + c[3].x) * 0.25,
+        y: (c[0].y + c[1].y + c[2].y + c[3].y) * 0.25,
+      };
+    };
+
+    const c0 = getCenter(m0); // M0 Center (Top-Left)
+    const c1 = getCenter(m1); // M1 Center (Top-Right)
+    const c2 = getCenter(m2); // M2 Center (Bottom-Left)
+    const c3 = getCenter(m3); // M3 Center (Bottom-Right)
 
     const dist = (a: IPoint, b: IPoint) => Math.hypot(a.x - b.x, a.y - b.y);
 
-    // 2. Estimate Normalized Marker Size (D_u, D_v)
-    // r_u = 0.5 * ( ||M0[1] - M0[0]|| / ||M1[1] - M0[0]|| + ||M2[2] - M2[3]|| / ||M3[2] - M2[3]|| )
-    // r_v = 0.5 * ( ||M0[3] - M0[0]|| / ||M2[3] - M0[0]|| + ||M1[2] - M1[1]|| / ||M3[2] - M1[1]|| )
-    const spanU0 = dist(m1.corners[1], m0.corners[0]);
-    const spanU1 = dist(m3.corners[2], m2.corners[3]);
-    const spanV0 = dist(m2.corners[3], m0.corners[0]);
-    const spanV1 = dist(m3.corners[2], m1.corners[1]);
+    // 2. Estimate Normalized Marker Size (D_u, D_v) relative to center-to-center spans
+    const spanU0 = dist(c1, c0);
+    const spanU1 = dist(c3, c2);
+    const spanV0 = dist(c2, c0);
+    const spanV1 = dist(c3, c1);
 
     if (spanU0 === 0 || spanU1 === 0 || spanV0 === 0 || spanV1 === 0) {
       return null;
@@ -72,9 +76,10 @@ export class PaperGeometry {
     const r_u = 0.5 * (dist(m0.corners[1], m0.corners[0]) / spanU0 + dist(m2.corners[2], m2.corners[3]) / spanU1);
     const r_v = 0.5 * (dist(m0.corners[3], m0.corners[0]) / spanV0 + dist(m1.corners[2], m1.corners[1]) / spanV1);
 
-    // 3. Map Outer Corners directly to Inset Screen Coordinates
-    // u_min = W * (paddingRatio * r_u) / (1 + 2 * paddingRatio * r_u)
-    // Since outwardPaddingRatio = 0.5 by default: 2 * 0.5 * r_u = r_u -> 1 + r_u
+    // 3. Map Marker Centers directly to Inset Screen Coordinates
+    // The screen represents [0, screenWidth] x [0, screenHeight].
+    // Each side expands outward from the marker center by outwardPaddingRatio * D.
+    // Total screen span = centerSpan + 2 * outwardPaddingRatio * D = centerSpan * (1 + 2 * outwardPaddingRatio * r).
     const totalExpansionU = 2 * this.outwardPaddingRatio * r_u;
     const totalExpansionV = 2 * this.outwardPaddingRatio * r_v;
 
@@ -84,10 +89,10 @@ export class PaperGeometry {
     const v_max = this.screenHeight - v_min;
 
     // DLT Homography screenToCameraH:
-    // (u_min, v_min) -> p0 (M0 TL)
-    // (u_max, v_min) -> p1 (M1 TR)
-    // (u_max, v_max) -> p3 (M3 BR)
-    // (u_min, v_max) -> p2 (M2 BL)
+    // (u_min, v_min) -> c0 (M0 Center)
+    // (u_max, v_min) -> c1 (M1 Center)
+    // (u_max, v_max) -> c3 (M3 Center)
+    // (u_min, v_max) -> c2 (M2 Center)
     const srcPts: [number, number][] = [
       [u_min, v_min],
       [u_max, v_min],
@@ -95,10 +100,10 @@ export class PaperGeometry {
       [u_min, v_max],
     ];
     const dstPts: [number, number][] = [
-      [p0.x, p0.y],
-      [p1.x, p1.y],
-      [p3.x, p3.y],
-      [p2.x, p2.y],
+      [c0.x, c0.y],
+      [c1.x, c1.y],
+      [c3.x, c3.y],
+      [c2.x, c2.y],
     ];
 
     const screenToCameraH = PaperGeometry.findHomography(srcPts, dstPts);
