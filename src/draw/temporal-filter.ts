@@ -141,8 +141,12 @@ export class TemporalInkFilter {
         const tx = Math.floor(x / tileSize);
         const isTileUnstable = this.tileUnstable[tyOffset + tx] === 1;
 
-        if (validMask[idx] === 0 || isTileUnstable) {
-          // Freeze persistentInk at current value
+        if (validMask[idx] === 0) {
+          // Explicitly clear ink and reset stability for excluded areas (e.g. markers, out of bounds)
+          this.persistentInk[idx] = 0;
+          this.stabilityCount[idx] = 0;
+        } else if (isTileUnstable) {
+          // Freeze persistentInk at current value during transient motion
           this.stabilityCount[idx] = 0;
         } else {
           this.stabilityCount[idx]++;
@@ -153,7 +157,7 @@ export class TemporalInkFilter {
 
         // Render to ImageData:
         // out = 255 - persistentInk[i] (white paper background, black ink strokes)
-        const inkVal = this.persistentInk[idx];
+        const inkVal = validMask[idx] === 0 ? 0 : this.persistentInk[idx];
         const pixelVal = Math.max(0, Math.min(255, Math.round(255 - inkVal)));
 
         const outIdx = idx << 2;
