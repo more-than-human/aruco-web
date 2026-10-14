@@ -21,8 +21,8 @@ const TRACKER_CONFIG = {
   limit: 50,
   maxHammingDistance: 2,
   maxMissedFrames: 20,
-  processNoise: 8.0,
-  measurementNoise: 2.5,
+  processNoise: 1.5,
+  measurementNoise: 8.0,
   coastVelocityDamping: 0.85,
 } as const;
 
@@ -54,7 +54,18 @@ window.addEventListener("load", async () => {
     detector: wasmDetector,
   });
 
-  const digitizer = new PaperDigitizer(DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT);
+  const digitizer = new PaperDigitizer(DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT, {
+    threshold: {
+      thresholdLow: 8, // Pick up faint strokes under low contrast
+      thresholdHigh: 22,
+      windowSize: 31,
+    },
+    temporal: {
+      motionThreshold: 16, // Tolerant to residual jitter
+      requiredStableFrames: 4, // Faster ink confirmation
+      blendAlpha: 0.6,
+    },
+  });
 
   await initCamera(video);
   await setupCameraSelector(
