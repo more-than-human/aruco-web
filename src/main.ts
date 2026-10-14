@@ -1,7 +1,7 @@
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
 import { Marker, Detector as TsDetector } from "./lib/aruco.ts";
-import { Tracker, TrackedMarker } from "./lib/tracker.ts";
+import { TrackedMarker, Tracker } from "./lib/tracker.ts";
 import "./style.css";
 
 let sourceVideo: HTMLVideoElement;
