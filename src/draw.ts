@@ -1,15 +1,19 @@
 import { initCamera, setupCameraSelector } from "./camera.ts";
+import "./draw.css";
+import { A4_PORTRAIT_HEIGHT, A4_PORTRAIT_WIDTH, PaperDigitizer } from "./draw/index.ts";
+import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
-import { Marker, Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
-import { TrackedMarker, Tracker } from "./lib/tracker.ts";
-import "./style.css";
+import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
+import { Tracker } from "./lib/tracker.ts";
 
 // --- Configuration Constants ---
 const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
-const STROKE_COLOR = "#00e676";
-const LINE_WIDTH = 3;
-const COASTING_DASH_PATTERN = [6, 4];
+
+// Render digitized paper in portrait A4 dimensions
+const DIGITIZED_PAPER_WIDTH = A4_PORTRAIT_WIDTH;
+const DIGITIZED_PAPER_HEIGHT = A4_PORTRAIT_HEIGHT;
+
 const DICTIONARY_NAME = "4x4_1000";
 
 const TRACKER_CONFIG = {
@@ -28,11 +32,14 @@ window.addEventListener("load", async () => {
 
   const video = document.querySelector<HTMLVideoElement>("#video")!;
   const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+  const paperCanvas = document.querySelector<HTMLCanvasElement>("#paper-canvas")!;
 
   video.width = VIDEO_WIDTH;
   video.height = VIDEO_HEIGHT;
   canvas.width = VIDEO_WIDTH;
   canvas.height = VIDEO_HEIGHT;
+  paperCanvas.width = DIGITIZED_PAPER_WIDTH;
+  paperCanvas.height = DIGITIZED_PAPER_HEIGHT;
 
   await initArUcoWasm(arucoWatBytes);
 
@@ -47,52 +54,50 @@ window.addEventListener("load", async () => {
     detector: wasmDetector,
   });
 
-  await initCamera(video);
-  await setupCameraSelector(video, () => tracker.reset(), {
-    idealWidth: VIDEO_WIDTH,
-    idealHeight: VIDEO_HEIGHT,
-  });
+  const digitizer = new PaperDigitizer(DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT);
 
-  startDetectionLoop(video, canvas, tracker);
+  await initCamera(video);
+  await setupCameraSelector(
+    video,
+    () => {
+      tracker.reset();
+      digitizer.reset();
+    },
+    {
+      idealWidth: VIDEO_WIDTH,
+      idealHeight: VIDEO_HEIGHT,
+    },
+  );
+
+  startDetectionLoop(video, canvas, paperCanvas, tracker, digitizer);
 });
 
 // --- Core Rendering & Processing Loop ---
-function startDetectionLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement, tracker: Tracker): void {
+function startDetectionLoop(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  paperCanvas: HTMLCanvasElement,
+  tracker: Tracker,
+  digitizer: PaperDigitizer,
+): void {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const paperCtx = paperCanvas.getContext("2d", { willReadFrequently: true })!;
 
   const update = () => {
     ctx.drawImage(video, 0, 0, video.width, video.height);
     const imageData = ctx.getImageData(0, 0, video.width, video.height);
     const markers = tracker.detect(imageData, performance.now());
 
-    drawCorners(ctx, markers);
+    const { digitizedImage, warpModel } = digitizer.processFrame(imageData, markers);
+    paperCtx.putImageData(digitizedImage, 0, 0);
+
+    renderCorners(ctx, markers);
+    if (warpModel) {
+      renderPaperBoundary(ctx, warpModel);
+    }
+
     requestAnimationFrame(update);
   };
 
   requestAnimationFrame(update);
-}
-
-function drawCorners(ctx: CanvasRenderingContext2D, markers: (Marker | TrackedMarker)[]): void {
-  ctx.save();
-  ctx.lineWidth = LINE_WIDTH;
-  ctx.strokeStyle = STROKE_COLOR;
-
-  for (const marker of markers) {
-    const isPredicted = marker instanceof TrackedMarker && marker.isPredicted;
-    ctx.setLineDash(isPredicted ? COASTING_DASH_PATTERN : []);
-
-    ctx.beginPath();
-    for (let j = 0; j < marker.corners.length; ++j) {
-      const corner = marker.corners[j];
-      if (j === 0) {
-        ctx.moveTo(corner.x, corner.y);
-      } else {
-        ctx.lineTo(corner.x, corner.y);
-      }
-    }
-    ctx.closePath();
-    ctx.stroke();
-  }
-
-  ctx.restore();
 }

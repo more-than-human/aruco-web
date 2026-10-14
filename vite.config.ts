@@ -54,6 +54,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         benchmark: resolve(import.meta.dirname, "benchmark.html"),
+        draw: resolve(import.meta.dirname, "draw.html"),
       },
     },
   },
