@@ -1,48 +1,57 @@
 import type { IPoint, Marker } from "../lib/aruco.ts";
 import { TrackedMarker } from "../lib/tracker.ts";
-import type { IRect, PaperWarpModel } from "./types.ts";
+import {
+  DIGITIZING_ZONE_EXTEND_MM,
+  LETTER_LANDSCAPE_HEIGHT_MM,
+  LETTER_LANDSCAPE_WIDTH_MM,
+  MARKER_SIZE_MM,
+  PAPER_EDGE_PADDING_MM,
+  type IRect,
+  type PaperWarpModel,
+} from "./types.ts";
 
 /**
- * Stage 1: PaperGeometry
- * Given the 4 tracked markers (id = 0, 1, 2, 3), computes the perspective
- * transformation between screen canvas (width x height, assumed portrait A4)
- * and camera image, accounting for 1.0xD outward paper margin from marker centers
- * and 0.1xD marker exclusion zones.
- *
- * Markers are assumed placed on the paper with portrait orientation:
- * - Marker 0: Top-Left
- * - Marker 1: Top-Right
- * - Marker 2: Bottom-Left
- * - Marker 3: Bottom-Right
+ * Computes perspective transformations and digitizing geometry
+ * for a US Letter sheet tracked by 4 corner markers (TL: 1, TR: 2, BR: 3, BL: 4).
  */
 export class PaperGeometry {
   private screenWidth: number;
   private screenHeight: number;
-  private outwardPaddingRatio: number;
   private markerMarginRatio: number;
 
-  constructor(screenWidth: number, screenHeight: number, outwardPaddingRatio = 1.0, markerMarginRatio = 0.2) {
+  public static readonly PAPER_WIDTH_MM = LETTER_LANDSCAPE_WIDTH_MM;
+  public static readonly PAPER_HEIGHT_MM = LETTER_LANDSCAPE_HEIGHT_MM;
+  public static readonly MARKER_SIZE_MM = MARKER_SIZE_MM;
+  public static readonly PAPER_EDGE_PADDING_MM = PAPER_EDGE_PADDING_MM;
+  public static readonly DIGITIZING_ZONE_EXTEND_MM = DIGITIZING_ZONE_EXTEND_MM;
+
+  public static readonly MARKER_CENTER_OFFSET_MM = PAPER_EDGE_PADDING_MM + MARKER_SIZE_MM * 0.5;
+
+  public static readonly CENTER_SPAN_U_MM = LETTER_LANDSCAPE_WIDTH_MM - 2 * PaperGeometry.MARKER_CENTER_OFFSET_MM;
+  public static readonly CENTER_SPAN_V_MM = LETTER_LANDSCAPE_HEIGHT_MM - 2 * PaperGeometry.MARKER_CENTER_OFFSET_MM;
+
+  public static readonly DIGITIZING_EXTEND_MM = DIGITIZING_ZONE_EXTEND_MM;
+  public static readonly DIGITIZING_WIDTH_MM = PaperGeometry.CENTER_SPAN_U_MM + 2 * PaperGeometry.DIGITIZING_EXTEND_MM;
+  public static readonly DIGITIZING_HEIGHT_MM = PaperGeometry.CENTER_SPAN_V_MM + 2 * PaperGeometry.DIGITIZING_EXTEND_MM;
+
+  constructor(screenWidth: number, screenHeight: number, _outwardPaddingRatio?: number, markerMarginRatio = 0.2) {
     this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
-    this.outwardPaddingRatio = outwardPaddingRatio;
     this.markerMarginRatio = markerMarginRatio;
   }
 
   public computeWarpModel(markers: (Marker | TrackedMarker)[]): PaperWarpModel | null {
-    // 1. Validate Markers: Ensure markers 0, 1, 2, 3 are all present (coasting markers are accepted)
-    const m0 = markers.find((m) => m.id === 0);
-    const m1 = markers.find((m) => m.id === 1);
-    const m2 = markers.find((m) => m.id === 2);
-    const m3 = markers.find((m) => m.id === 3);
+    const m1 = markers.find((m) => m.id === 0);
+    const m2 = markers.find((m) => m.id === 1);
+    const m3 = markers.find((m) => m.id === 2);
+    const m4 = markers.find((m) => m.id === 3);
 
-    if (!m0 || !m1 || !m2 || !m3) {
+    if (!m1 || !m2 || !m3 || !m4) {
       return null;
     }
 
-    const markerList = [m0, m1, m2, m3];
+    const markerList = [m1, m2, m3, m4];
 
-    // Marker Centers:
-    // Averaging 4 corners gives a much more stable position than individual jittery corners
     const getCenter = (m: Marker | TrackedMarker): IPoint => {
       const c = m.corners;
       return {
@@ -51,43 +60,16 @@ export class PaperGeometry {
       };
     };
 
-    const c0 = getCenter(m0); // M0 Center (Top-Left)
-    const c1 = getCenter(m1); // M1 Center (Top-Right)
-    const c2 = getCenter(m2); // M2 Center (Bottom-Left)
-    const c3 = getCenter(m3); // M3 Center (Bottom-Right)
+    const cTL = getCenter(m1);
+    const cTR = getCenter(m2);
+    const cBR = getCenter(m3);
+    const cBL = getCenter(m4);
 
-    const dist = (a: IPoint, b: IPoint) => Math.hypot(a.x - b.x, a.y - b.y);
-
-    // 2. Estimate Normalized Marker Size (D_u, D_v) relative to center-to-center spans
-    const spanU0 = dist(c1, c0);
-    const spanU1 = dist(c3, c2);
-    const spanV0 = dist(c2, c0);
-    const spanV1 = dist(c3, c1);
-
-    if (spanU0 === 0 || spanU1 === 0 || spanV0 === 0 || spanV1 === 0) {
-      return null;
-    }
-
-    const r_u = 0.5 * (dist(m0.corners[1], m0.corners[0]) / spanU0 + dist(m2.corners[2], m2.corners[3]) / spanU1);
-    const r_v = 0.5 * (dist(m0.corners[3], m0.corners[0]) / spanV0 + dist(m1.corners[2], m1.corners[1]) / spanV1);
-
-    // 3. Map Marker Centers directly to Inset Screen Coordinates
-    // The screen represents [0, screenWidth] x [0, screenHeight].
-    // Each side expands outward from the marker center by outwardPaddingRatio * D.
-    // Total screen span = centerSpan + 2 * outwardPaddingRatio * D = centerSpan * (1 + 2 * outwardPaddingRatio * r).
-    const totalExpansionU = 2 * this.outwardPaddingRatio * r_u;
-    const totalExpansionV = 2 * this.outwardPaddingRatio * r_v;
-
-    const u_min = this.screenWidth * ((this.outwardPaddingRatio * r_u) / (1 + totalExpansionU));
+    const u_min = this.screenWidth * (PaperGeometry.DIGITIZING_EXTEND_MM / PaperGeometry.DIGITIZING_WIDTH_MM);
     const u_max = this.screenWidth - u_min;
-    const v_min = this.screenHeight * ((this.outwardPaddingRatio * r_v) / (1 + totalExpansionV));
+    const v_min = this.screenHeight * (PaperGeometry.DIGITIZING_EXTEND_MM / PaperGeometry.DIGITIZING_HEIGHT_MM);
     const v_max = this.screenHeight - v_min;
 
-    // DLT Homography screenToCameraH:
-    // (u_min, v_min) -> c0 (M0 Center)
-    // (u_max, v_min) -> c1 (M1 Center)
-    // (u_max, v_max) -> c3 (M3 Center)
-    // (u_min, v_max) -> c2 (M2 Center)
     const srcPts: [number, number][] = [
       [u_min, v_min],
       [u_max, v_min],
@@ -95,10 +77,10 @@ export class PaperGeometry {
       [u_min, v_max],
     ];
     const dstPts: [number, number][] = [
-      [c0.x, c0.y],
-      [c1.x, c1.y],
-      [c3.x, c3.y],
-      [c2.x, c2.y],
+      [cTL.x, cTL.y],
+      [cTR.x, cTR.y],
+      [cBR.x, cBR.y],
+      [cBL.x, cBL.y],
     ];
 
     const screenToCameraH = PaperGeometry.findHomography(srcPts, dstPts);
@@ -107,9 +89,6 @@ export class PaperGeometry {
     const cameraToScreenH = PaperGeometry.invert3x3(screenToCameraH);
     if (!cameraToScreenH) return null;
 
-    // 4. Compute Marker Exclusion Boxes (+0.1 * D):
-    // Project all 4 corners of each marker into screen space, take bounding box [minX, minY, maxX, maxY],
-    // and expand each side outward by markerMarginRatio * (boxWidth, boxHeight).
     const markerExclusionBoxes: IRect[] = [];
     for (const m of markerList) {
       let bMinX = Infinity;
@@ -138,12 +117,20 @@ export class PaperGeometry {
       });
     }
 
-    // 4 outer paper corners in camera space (for debug overlay)
-    // Project the full screen corners (0,0), (W,0), (W,H), (0,H) back to camera space
-    const [cTL_x, cTL_y] = PaperGeometry.projectPoint(screenToCameraH, 0, 0);
-    const [cTR_x, cTR_y] = PaperGeometry.projectPoint(screenToCameraH, this.screenWidth, 0);
-    const [cBR_x, cBR_y] = PaperGeometry.projectPoint(screenToCameraH, this.screenWidth, this.screenHeight);
-    const [cBL_x, cBL_y] = PaperGeometry.projectPoint(screenToCameraH, 0, this.screenHeight);
+    const paperMarginScreenX =
+      this.screenWidth * ((PaperGeometry.MARKER_CENTER_OFFSET_MM - PaperGeometry.DIGITIZING_EXTEND_MM) / PaperGeometry.DIGITIZING_WIDTH_MM);
+    const paperMarginScreenY =
+      this.screenHeight * ((PaperGeometry.MARKER_CENTER_OFFSET_MM - PaperGeometry.DIGITIZING_EXTEND_MM) / PaperGeometry.DIGITIZING_HEIGHT_MM);
+
+    const paperLeft = -paperMarginScreenX;
+    const paperRight = this.screenWidth + paperMarginScreenX;
+    const paperTop = -paperMarginScreenY;
+    const paperBottom = this.screenHeight + paperMarginScreenY;
+
+    const [cTL_x, cTL_y] = PaperGeometry.projectPoint(screenToCameraH, paperLeft, paperTop);
+    const [cTR_x, cTR_y] = PaperGeometry.projectPoint(screenToCameraH, paperRight, paperTop);
+    const [cBR_x, cBR_y] = PaperGeometry.projectPoint(screenToCameraH, paperRight, paperBottom);
+    const [cBL_x, cBL_y] = PaperGeometry.projectPoint(screenToCameraH, paperLeft, paperBottom);
 
     const cameraPaperQuad: IPoint[] = [
       { x: cTL_x, y: cTL_y },
@@ -162,17 +149,8 @@ export class PaperGeometry {
 
   /**
    * Solves for 3x3 homography H such that dst = H * src for 4 point correspondences.
-   * Standard DLT via 8x8 linear system with H[8] = 1.
    */
   public static findHomography(src: [number, number][], dst: [number, number][]): Float64Array | null {
-    // 8 equations for 8 unknowns (h00, h01, h02, h10, h11, h12, h20, h21) with h22 = 1.
-    // For each point i:
-    // xi' = (h00*xi + h01*yi + h02) / (h20*xi + h21*yi + 1)
-    // yi' = (h10*xi + h11*yi + h12) / (h20*xi + h21*yi + 1)
-    // =>
-    // xi*h00 + yi*h01 + h02 + 0 + 0 + 0 - xi*xi'*h20 - yi*xi'*h21 = xi'
-    // 0 + 0 + 0 + xi*h10 + yi*h11 + h12 - xi*yi'*h20 - yi*yi'*h21 = yi'
-
     const A: number[][] = [];
     const b: number[] = [];
 
@@ -185,7 +163,6 @@ export class PaperGeometry {
       b.push(v);
     }
 
-    // Solve 8x8 linear system A * h = b via Gaussian elimination with partial pivoting
     const h = PaperGeometry.solveLinearSystem(A, b);
     if (!h) return null;
 

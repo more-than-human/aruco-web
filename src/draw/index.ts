@@ -3,7 +3,7 @@ import type { TrackedMarker } from "../lib/tracker.ts";
 import { PaperGeometry } from "./homography.ts";
 import { type TemporalFilterConfig, TemporalInkFilter } from "./temporal-filter.ts";
 import { AdaptiveThreshold, type ThresholdConfig } from "./threshold.ts";
-import { A4_PORTRAIT_HEIGHT, A4_PORTRAIT_WIDTH, type PaperWarpModel } from "./types.ts";
+import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, type PaperWarpModel } from "./types.ts";
 import { PerspectiveWarper } from "./warper.ts";
 
 export interface PaperDigitizerConfig {
@@ -21,7 +21,7 @@ export class PaperDigitizer {
   private threshold: AdaptiveThreshold;
   private temporalFilter: TemporalInkFilter;
 
-  constructor(width: number = A4_PORTRAIT_WIDTH, height: number = A4_PORTRAIT_HEIGHT, config?: PaperDigitizerConfig) {
+  constructor(width: number = LETTER_LANDSCAPE_WIDTH, height: number = LETTER_LANDSCAPE_HEIGHT, config?: PaperDigitizerConfig) {
     this.width = width;
     this.height = height;
     this.geometry = new PaperGeometry(width, height, config?.outwardPaddingRatio, config?.markerMarginRatio);
@@ -69,6 +69,15 @@ export { PaperGeometry } from "./homography.ts";
 export { renderCorners, renderPaperBoundary } from "./render.ts";
 export { TemporalInkFilter } from "./temporal-filter.ts";
 export { AdaptiveThreshold } from "./threshold.ts";
-export { A4_ASPECT_RATIO, A4_PORTRAIT_HEIGHT, A4_PORTRAIT_WIDTH } from "./types.ts";
+export {
+  DIGITIZING_ZONE_EXTEND_MM,
+  LETTER_ASPECT_RATIO,
+  LETTER_LANDSCAPE_HEIGHT,
+  LETTER_LANDSCAPE_HEIGHT_MM,
+  LETTER_LANDSCAPE_WIDTH,
+  LETTER_LANDSCAPE_WIDTH_MM,
+  MARKER_SIZE_MM,
+  PAPER_EDGE_PADDING_MM,
+} from "./types.ts";
 export type { IRect, PaperWarpModel, RectifiedFrame } from "./types.ts";
 export { PerspectiveWarper } from "./warper.ts";

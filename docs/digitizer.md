@@ -2,15 +2,16 @@
 
 ## 1. Overview & Design Goals
 
-This system digitizes black Sharpie strokes drawn on a physical sheet of white paper tracked by 4 ArUco markers (`4x4_1000`, IDs `0, 1, 2, 3`) and renders a perspective-corrected, clean 2D drawing onto the screen in real time.
+This system digitizes black Sharpie strokes drawn on a physical sheet of white paper tracked by 4 ArUco markers (`4x4_1000`, IDs `1, 2, 3, 4`) and renders a perspective-corrected, clean 2D drawing onto the screen in real time.
 
 ### Core Simplifications & Assumptions
 
-1. **Known Marker Orientation:** All 4 markers are upright and consistently oriented. For every marker, `corners` are ordered clockwise starting from Top-Left:
-   - `corners[0]` = Top-Left (TL)
-   - `corners[1]` = Top-Right (TR)
-   - `corners[2]` = Bottom-Right (BR)
-   - `corners[3]` = Bottom-Left (BL)
+1. **Known Marker Orientation & Paper Layout:** The paper is US Letter in landscape orientation (width = 279.4 mm, height = 215.9 mm). Markers are 20 mm × 20 mm placed with 10 mm margin to the edges.
+   Corner marker IDs:
+   - Marker 1: Top-Left (TL)
+   - Marker 2: Top-Right (TR)
+   - Marker 3: Bottom-Right (BR)
+   - Marker 4: Bottom-Left (BL)
 2. **Modular Pipeline:** Each stage of the pipeline is an independent module with plain data structures (TypedArrays and simple interfaces) passed between stages.
 3. **Simplicity over Edge-Case Heuristics:** Hand, pen, and shadow rejection is handled uniformly by a simple **Temporal Stability Filter** + **Masked Adaptive Threshold**, avoiding complex skin-tone classifiers or multi-scale blob heuristics.
 
@@ -61,17 +62,23 @@ To eliminate jitter caused by individual noisy corner detections, the 4 marker c
 
 $$C = \frac{1}{4} \sum_{i=0}^3 \text{corner}_i$$
 
-- **Top-Left Marker (`id = 0`):** Center $C_0$
-- **Top-Right Marker (`id = 1`):** Center $C_1$
-- **Bottom-Left Marker (`id = 2`):** Center $C_2$
-- **Bottom-Right Marker (`id = 3`):** Center $C_3$
+- **Top-Left Marker (`id = 1`):** Center $C_{TL}$
+- **Top-Right Marker (`id = 2`):** Center $C_{TR}$
+- **Bottom-Right Marker (`id = 3`):** Center $C_{BR}$
+- **Bottom-Left Marker (`id = 4`):** Center $C_{BL}$
 
-### 3.2 Paper Boundary ($1.0 \times D$ Outward Padding from Centers) & Marker Mask ($0.1 \times D$ Expansion)
+### 3.2 Dimensions and Coordinate System
 
-Let $D_u, D_v$ be the normalized marker width and height in rectified space (measured relative to the center-to-center spans).
-
-- **Full Paper Viewport:** Expands outward by $1.0 \times D$ beyond the marker centers ($0.5 \times D$ from center to marker edge $+ 0.5 \times D$ margin beyond the marker edge).
-- **No-Draw Marker Zones:** Each marker's bounding box in screen space is expanded outward by $0.1 \times D$ on all 4 sides (total box size $= 1.2 \times D$). Pixels inside these 4 boxes are masked out (`validMask[i] = 0`).
+- **Physical Paper Size:** US Letter landscape: $W_{paper} = 279.4\text{ mm}$, $H_{paper} = 215.9\text{ mm}$.
+- **Markers:** $20\text{ mm} \times 20\text{ mm}$, inset $10\text{ mm}$ from paper edge to marker outer boundary.
+  - Marker center offset from paper edge: $10\text{ mm} + 10\text{ mm} = 20\text{ mm}$.
+  - Horizontal center span: $279.4 - 2 \times 20 = 239.4\text{ mm}$.
+  - Vertical center span: $215.9 - 2 \times 20 = 175.9\text{ mm}$.
+- **Digitizing Zone:** Extends $15\text{ mm}$ beyond marker centers.
+  - Digitizing width: $239.4 + 2 \times 15 = 269.4\text{ mm}$.
+  - Digitizing height: $175.9 + 2 \times 15 = 205.9\text{ mm}$.
+  - Inset ratio: $\frac{15}{269.4}$ horizontally, $\frac{15}{205.9}$ vertically.
+- **No-Draw Marker Zones:** Each marker's bounding box in screen space is expanded outward by margin ratio (default $0.2 \times D$) on all 4 sides. Pixels inside these 4 boxes are masked out (`validMask[i] = 0`).
 
 ---
 

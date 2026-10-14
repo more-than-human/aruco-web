@@ -7,10 +7,19 @@ export interface IRect {
   maxY: number;
 }
 
-/** Standard A4 dimensions in portrait orientation (aspect ratio 1 : √2) */
-export const A4_PORTRAIT_WIDTH = 595;
-export const A4_PORTRAIT_HEIGHT = 842;
-export const A4_ASPECT_RATIO = A4_PORTRAIT_WIDTH / A4_PORTRAIT_HEIGHT; // ~0.707 (1 / √2)
+/** US Letter paper dimensions in landscape orientation (in mm: 279.4 x 215.9, or 11 x 8.5 in) */
+export const LETTER_LANDSCAPE_WIDTH_MM = 279.4;
+export const LETTER_LANDSCAPE_HEIGHT_MM = 215.9;
+export const LETTER_ASPECT_RATIO = LETTER_LANDSCAPE_WIDTH_MM / LETTER_LANDSCAPE_HEIGHT_MM; // ~1.2941
+
+/** Physical marker specifications (in mm) */
+export const MARKER_SIZE_MM = 20; // 20mm x 20mm
+export const PAPER_EDGE_PADDING_MM = 10; // 10mm padding to edge of paper
+export const DIGITIZING_ZONE_EXTEND_MM = 15; // 15mm beyond marker center
+
+/** Default screen/buffer pixel resolution matching US Letter landscape aspect ratio */
+export const LETTER_LANDSCAPE_WIDTH = 1100;
+export const LETTER_LANDSCAPE_HEIGHT = 850;
 
 /** Output of Stage 1 (PaperGeometry) */
 export interface PaperWarpModel {

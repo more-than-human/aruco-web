@@ -1,6 +1,6 @@
 import { initCamera, setupCameraSelector } from "./camera.ts";
 import "./draw.css";
-import { A4_PORTRAIT_HEIGHT, A4_PORTRAIT_WIDTH, PaperDigitizer } from "./draw/index.ts";
+import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperDigitizer } from "./draw/index.ts";
 import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
@@ -10,9 +10,9 @@ import { Tracker } from "./lib/tracker.ts";
 const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
 
-// Render digitized paper in portrait A4 dimensions
-const DIGITIZED_PAPER_WIDTH = A4_PORTRAIT_WIDTH;
-const DIGITIZED_PAPER_HEIGHT = A4_PORTRAIT_HEIGHT;
+// Render digitized paper in landscape US Letter dimensions
+const DIGITIZED_PAPER_WIDTH = LETTER_LANDSCAPE_WIDTH;
+const DIGITIZED_PAPER_HEIGHT = LETTER_LANDSCAPE_HEIGHT;
 
 const DICTIONARY_NAME = "4x4_1000";
 
