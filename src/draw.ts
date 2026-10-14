@@ -3,244 +3,86 @@ import { Marker, Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruc
 import { TrackedMarker, Tracker } from "./lib/tracker.ts";
 import "./style.css";
 
-let sourceVideo: HTMLVideoElement;
-let targetCanvas: HTMLCanvasElement;
-let activeEngine: "wasm" | "ts" = "wasm";
-let wasmDetector: WasmDetector | null = null;
-let tracker: Tracker;
+// --- Configuration Constants ---
+const VIDEO_WIDTH = 640;
+const VIDEO_HEIGHT = 480;
+const STROKE_COLOR = "#00e676";
+const LINE_WIDTH = 3;
+const COASTING_DASH_PATTERN = [6, 4];
+const DICTIONARY_NAME = "4x4_1000";
 
-async function initCamera(): Promise<HTMLVideoElement> {
-  const constraints: MediaStreamConstraints = {
-    audio: false,
-    video: {
-      // using the "environment" rear camera
-      facingMode: "environment",
-      // using the "user" front camera
-      // facingMode: "user",
-      width: 1280,
-      height: 720,
-    },
-  };
+const TRACKER_CONFIG = {
+  dictionaryName: DICTIONARY_NAME,
+  limit: 50,
+  maxHammingDistance: 2,
+  maxMissedFrames: 20,
+  processNoise: 8.0,
+  measurementNoise: 2.5,
+  coastVelocityDamping: 0.85,
+} as const;
 
-  // initialize video source
-  const video = document.querySelector<HTMLVideoElement>("#video")!;
-  video.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
-
-  return new Promise((resolve) => {
-    video.onloadedmetadata = () => {
-      resolve(video);
-    };
-  });
-}
-
-function initTargetCanvas(): void {
-  // target canvas should overlap source video
-  targetCanvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
-  targetCanvas.width = sourceVideo.width;
-  targetCanvas.height = sourceVideo.height;
-}
-
-export function getImageData(v: CanvasImageSource, w: number, h: number): ImageData {
-  console.log(v);
-  const ctx = targetCanvas.getContext("2d")!;
-  ctx.drawImage(v, 0, 0, w, h);
-  return ctx.getImageData(0, 0, w, h);
-}
-
+// --- Application Lifecycle ---
 window.addEventListener("load", async () => {
   console.log("init ARuco app...");
 
+  const video = document.querySelector<HTMLVideoElement>("#video")!;
+  const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+
+  video.width = VIDEO_WIDTH;
+  video.height = VIDEO_HEIGHT;
+  canvas.width = VIDEO_WIDTH;
+  canvas.height = VIDEO_HEIGHT;
+
   await initArUcoWasm(arucoWatBytes);
-  wasmDetector = new WasmDetector({
-    dictionaryName: "4x4_1000",
-    limit: 50,
-    maxHammingDistance: 2,
+
+  const wasmDetector = new WasmDetector({
+    dictionaryName: DICTIONARY_NAME,
+    limit: TRACKER_CONFIG.limit,
+    maxHammingDistance: TRACKER_CONFIG.maxHammingDistance,
   });
-  tracker = new Tracker({
-    dictionaryName: "4x4_1000",
-    limit: 50,
-    maxHammingDistance: 2,
+
+  const tracker = new Tracker({
+    ...TRACKER_CONFIG,
     detector: wasmDetector,
-    maxMissedFrames: 20,
-    processNoise: 8.0,
-    measurementNoise: 2.5,
-    coastVelocityDamping: 0.85,
   });
 
-  setupEngineSelector();
+  setupEngineSelector(tracker, wasmDetector);
 
-  initCamera()
-    .then((video) => {
-      // start camera playback
-      sourceVideo = video;
-      sourceVideo.width = 640;
-      sourceVideo.height = 480;
-      sourceVideo.play();
+  await initCamera(video);
+  await setupCameraSelector(video, tracker);
 
-      // init target canvas
-      initTargetCanvas();
-
-      // Populate camera selector after initial permission is granted
-      setupCameraSelector(sourceVideo);
-
-      return new Promise<HTMLVideoElement>((resolve) => {
-        sourceVideo.addEventListener("loadeddata", (event) => {
-          console.log("Camera is ready", event);
-          resolve(sourceVideo);
-        });
-      });
-    })
-    .then((video) => {
-      let imageData: ImageData;
-
-      function update() {
-        const ctx = targetCanvas.getContext("2d", {
-          willReadFrequently: true,
-        })!;
-        ctx.drawImage(video, 0, 0, video.width, video.height);
-        imageData = ctx.getImageData(0, 0, video.width, video.height);
-
-        const markers = tracker.detect(imageData, performance.now());
-
-        drawCorners(ctx, markers);
-        updateStatusBadge(markers);
-        requestAnimationFrame(update);
-      }
-
-      update();
-    });
+  startDetectionLoop(video, canvas, tracker);
 });
 
-function setupEngineSelector(): void {
-  const engineSelect = document.getElementById("engine-select") as HTMLSelectElement | null;
-  if (!engineSelect) {
-    return;
-  }
+// --- Core Rendering & Processing Loop ---
+function startDetectionLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement, tracker: Tracker): void {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-  if (!wasmDetector) {
-    const wasmOption = engineSelect.querySelector('option[value="wasm"]') as HTMLOptionElement | null;
-    if (wasmOption) {
-      wasmOption.disabled = true;
-      wasmOption.text += " (Not Supported / Failed to load)";
-    }
-    engineSelect.value = "ts";
-    activeEngine = "ts";
-  } else {
-    engineSelect.value = activeEngine;
-  }
+  const update = () => {
+    ctx.drawImage(video, 0, 0, video.width, video.height);
+    const imageData = ctx.getImageData(0, 0, video.width, video.height);
+    const markers = tracker.detect(imageData, performance.now());
 
-  engineSelect.addEventListener("change", () => {
-    activeEngine = engineSelect.value as "wasm" | "ts";
-    const detector = wasmDetector;
-    if (detector) {
-      tracker.setDetector(detector);
-    }
-    console.log(`Switched engine to: ${activeEngine}`);
-  });
-}
+    drawCorners(ctx, markers);
+    updateStatusBadge(tracker, markers);
+    requestAnimationFrame(update);
+  };
 
-function updateStatusBadge(markers?: (Marker | TrackedMarker)[]): void {
-  const statsEl = document.getElementById("tracker-stats");
-  if (!statsEl) return;
-
-  const activeCount = tracker ? tracker.activeTracksCount : 0;
-  const coastingCount = markers ? markers.filter((m) => m instanceof TrackedMarker && m.isPredicted).length : 0;
-  if (coastingCount > 0) {
-    statsEl.textContent = `Kalman: ${activeCount} (${coastingCount} coasting)`;
-    statsEl.style.color = "#ef6c00";
-  } else {
-    statsEl.textContent = `Kalman: ${activeCount} active`;
-    statsEl.style.color = "#2e7d32";
-  }
-}
-
-async function setupCameraSelector(videoElement: HTMLVideoElement): Promise<void> {
-  const select = document.getElementById("camera-select") as HTMLSelectElement | null;
-  if (!select) {
-    return;
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-    console.warn("enumerateDevices() not supported.");
-    return;
-  }
-
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter((device) => device.kind === "videoinput");
-
-    select.innerHTML = "";
-
-    // Identify currently active camera device
-    let currentDeviceId: string | null = null;
-    if (videoElement.srcObject instanceof MediaStream) {
-      const videoTracks = videoElement.srcObject.getVideoTracks();
-      if (videoTracks.length > 0) {
-        currentDeviceId = videoTracks[0].getSettings().deviceId || null;
-      }
-    }
-
-    videoDevices.forEach((device, index) => {
-      const option = document.createElement("option");
-      option.value = device.deviceId;
-      option.text = device.label || `Camera ${index + 1}`;
-      if (device.deviceId === currentDeviceId) {
-        option.selected = true;
-      }
-      select.appendChild(option);
-    });
-
-    select.onchange = async () => {
-      const selectedDeviceId = select.value;
-
-      tracker.reset();
-
-      // Stop existing video tracks before switching
-      if (videoElement.srcObject instanceof MediaStream) {
-        videoElement.srcObject.getTracks().forEach((track: MediaStreamTrack) => track.stop());
-      }
-
-      const constraints: MediaStreamConstraints = {
-        audio: false,
-        video: {
-          deviceId: { exact: selectedDeviceId },
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-      };
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        videoElement.srcObject = stream;
-        await videoElement.play();
-        initTargetCanvas();
-      } catch (err) {
-        console.error("Error switching camera:", err);
-      }
-    };
-  } catch (err) {
-    console.error("Error enumerating devices:", err);
-  }
+  requestAnimationFrame(update);
 }
 
 function drawCorners(ctx: CanvasRenderingContext2D, markers: (Marker | TrackedMarker)[]): void {
   ctx.save();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#00e676";
+  ctx.lineWidth = LINE_WIDTH;
+  ctx.strokeStyle = STROKE_COLOR;
 
-  for (let i = 0; i < markers.length; ++i) {
-    const m = markers[i];
-    const corners = m.corners;
-    const isPredicted = m instanceof TrackedMarker && m.isPredicted;
-
-    if (isPredicted) {
-      ctx.setLineDash([6, 4]);
-    } else {
-      ctx.setLineDash([]);
-    }
+  for (const marker of markers) {
+    const isPredicted = marker instanceof TrackedMarker && marker.isPredicted;
+    ctx.setLineDash(isPredicted ? COASTING_DASH_PATTERN : []);
 
     ctx.beginPath();
-    for (let j = 0; j < corners.length; ++j) {
-      const corner = corners[j];
+    for (let j = 0; j < marker.corners.length; ++j) {
+      const corner = marker.corners[j];
       if (j === 0) {
         ctx.moveTo(corner.x, corner.y);
       } else {
@@ -252,4 +94,112 @@ function drawCorners(ctx: CanvasRenderingContext2D, markers: (Marker | TrackedMa
   }
 
   ctx.restore();
+}
+
+function updateStatusBadge(tracker: Tracker, markers?: (Marker | TrackedMarker)[]): void {
+  const statsEl = document.getElementById("tracker-stats");
+  if (!statsEl) return;
+
+  const activeCount = tracker.activeTracksCount;
+  const coastingCount = markers ? markers.filter((m) => m instanceof TrackedMarker && m.isPredicted).length : 0;
+
+  if (coastingCount > 0) {
+    statsEl.textContent = `Kalman: ${activeCount} (${coastingCount} coasting)`;
+    statsEl.style.color = "#ef6c00";
+  } else {
+    statsEl.textContent = `Kalman: ${activeCount} active`;
+    statsEl.style.color = "#2e7d32";
+  }
+}
+
+// --- Camera & Stream Management ---
+async function initCamera(video: HTMLVideoElement): Promise<void> {
+  const constraints: MediaStreamConstraints = {
+    audio: false,
+    video: {
+      facingMode: "environment",
+      width: 1280,
+      height: 720,
+    },
+  };
+
+  video.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+  await video.play();
+
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    await new Promise((resolve) => video.addEventListener("loadeddata", resolve, { once: true }));
+  }
+}
+
+async function setupCameraSelector(videoElement: HTMLVideoElement, tracker: Tracker): Promise<void> {
+  const select = document.getElementById("camera-select") as HTMLSelectElement | null;
+  if (!select || !navigator.mediaDevices?.enumerateDevices) {
+    return;
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter((device) => device.kind === "videoinput");
+
+    select.innerHTML = "";
+
+    const activeTrack = videoElement.srcObject instanceof MediaStream ? videoElement.srcObject.getVideoTracks()[0] : null;
+    const currentDeviceId = activeTrack?.getSettings().deviceId ?? null;
+
+    videoDevices.forEach((device, index) => {
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.text = device.label || `Camera ${index + 1}`;
+      option.selected = device.deviceId === currentDeviceId;
+      select.appendChild(option);
+    });
+
+    select.onchange = async () => {
+      tracker.reset();
+
+      if (videoElement.srcObject instanceof MediaStream) {
+        videoElement.srcObject.getTracks().forEach((track) => track.stop());
+      }
+
+      const constraints: MediaStreamConstraints = {
+        audio: false,
+        video: {
+          deviceId: { exact: select.value },
+          width: { ideal: VIDEO_WIDTH },
+          height: { ideal: VIDEO_HEIGHT },
+        },
+      };
+
+      try {
+        videoElement.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+        await videoElement.play();
+      } catch (err) {
+        console.error("Error switching camera:", err);
+      }
+    };
+  } catch (err) {
+    console.error("Error enumerating devices:", err);
+  }
+}
+
+// --- Engine Controls ---
+function setupEngineSelector(tracker: Tracker, wasmDetector: WasmDetector | null): void {
+  const engineSelect = document.getElementById("engine-select") as HTMLSelectElement | null;
+  if (!engineSelect) return;
+
+  if (!wasmDetector) {
+    const wasmOption = engineSelect.querySelector<HTMLOptionElement>('option[value="wasm"]');
+    if (wasmOption) {
+      wasmOption.disabled = true;
+      wasmOption.text += " (Not Supported / Failed to load)";
+    }
+    engineSelect.value = "ts";
+  }
+
+  engineSelect.addEventListener("change", () => {
+    if (wasmDetector) {
+      tracker.setDetector(wasmDetector);
+    }
+    console.log(`Switched engine to: ${engineSelect.value}`);
+  });
 }
