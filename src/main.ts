@@ -1,6 +1,8 @@
 import { initCamera, setupCameraSelector } from "./camera.ts";
+import { Cursor } from "./cursor/index.ts";
 import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperDigitizer } from "./draw/index.ts";
 import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
+import { HandTracker } from "./hand-tracking/index.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
 import { Tracker } from "./lib/tracker.ts";
@@ -72,6 +74,33 @@ window.addEventListener("load", async () => {
     },
   });
 
+  // Layer 1: Hand cursor on top DOM layer (simple red circle, minimum styling)
+  const cursor = new Cursor({
+    size: 20,
+    color: "#ff0000",
+    borderWidth: 0,
+    borderColor: "transparent",
+    visible: false,
+  });
+
+  // Hand tracking engine for index finger tracking
+  const handTracker = new HandTracker({
+    cameraCanvas,
+    mirrored: true,
+    smoothing: 0.5,
+    onUpdate: (result) => {
+      if (result.hasHand && result.screenPosition) {
+        cursor.setPosition(result.screenPosition.x, result.screenPosition.y);
+        cursor.show();
+      } else {
+        cursor.hide();
+      }
+    },
+    onLost: () => {
+      cursor.hide();
+    },
+  });
+
   // Voice -> Text speech recognition engine
   const speech = new SpeechRecognizer(SPEECH_CONFIG);
 
@@ -92,6 +121,7 @@ window.addEventListener("load", async () => {
     () => {
       tracker.reset();
       digitizer.reset();
+      cursor.hide();
     },
     {
       idealWidth: VIDEO_WIDTH,
@@ -100,6 +130,16 @@ window.addEventListener("load", async () => {
   );
 
   startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, digitizer);
+
+  // Initialize and start hand tracking asynchronously
+  handTracker
+    .init()
+    .then(() => {
+      handTracker.start(video);
+    })
+    .catch((err) => {
+      console.error("Error initializing HandTracker:", err);
+    });
 });
 
 // --- Core Rendering & Processing Loop ---
