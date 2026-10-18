@@ -104,17 +104,7 @@ export function invert3x3(m: Float64Array): Float64Array | null {
   const c21 = -(a00 * a12 - a02 * a10);
   const c22 = a00 * a11 - a01 * a10;
 
-  return new Float64Array([
-    c00 * invDet,
-    c10 * invDet,
-    c20 * invDet,
-    c01 * invDet,
-    c11 * invDet,
-    c21 * invDet,
-    c02 * invDet,
-    c12 * invDet,
-    c22 * invDet,
-  ]);
+  return new Float64Array([c00 * invDet, c10 * invDet, c20 * invDet, c01 * invDet, c11 * invDet, c21 * invDet, c02 * invDet, c12 * invDet, c22 * invDet]);
 }
 
 /**
@@ -124,10 +114,7 @@ export function multiply3x3(A: Float64Array, B: Float64Array): Float64Array {
   const out = new Float64Array(9);
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) {
-      out[r * 3 + c] =
-        A[r * 3 + 0] * B[0 * 3 + c] +
-        A[r * 3 + 1] * B[1 * 3 + c] +
-        A[r * 3 + 2] * B[2 * 3 + c];
+      out[r * 3 + c] = A[r * 3 + 0] * B[0 * 3 + c] + A[r * 3 + 1] * B[1 * 3 + c] + A[r * 3 + 2] * B[2 * 3 + c];
     }
   }
   return out;
@@ -163,9 +150,7 @@ export function isPointInPolygon(point: Point2D, polygon: Point2D[]): boolean {
       yi = polygon[i].y;
     const xj = polygon[j].x,
       yj = polygon[j].y;
-    const intersect =
-      yi > point.y !== yj > point.y &&
-      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+    const intersect = yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
   }
   return inside;

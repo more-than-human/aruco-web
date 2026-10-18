@@ -1,14 +1,7 @@
 import type { IPoint, Marker } from "../aruco-tracking/aruco.ts";
 import type { TrackedMarker } from "../aruco-tracking/tracker.ts";
 import { findHomography4Pts, invert3x3, multiply3x3, projectPoint } from "./homography.ts";
-import {
-  DEFAULT_SHEET_CONFIG,
-  type PaperBoundary,
-  type PaperSheetConfig,
-  type PaperTrackingResult,
-  type Point2D,
-  type Rect,
-} from "./types.ts";
+import { DEFAULT_SHEET_CONFIG, type PaperBoundary, type PaperSheetConfig, type PaperTrackingResult, type Point2D, type Rect } from "./types.ts";
 
 interface MarkerRecord {
   id: number;
@@ -38,10 +31,7 @@ export class PaperTracker {
   /**
    * Updates tracking state using detected markers from the current camera frame.
    */
-  public update(
-    markers: (Marker | TrackedMarker)[],
-    timestampMs: number = performance.now(),
-  ): PaperTrackingResult {
+  public update(markers: (Marker | TrackedMarker)[], timestampMs: number = performance.now()): PaperTrackingResult {
     const dt = this.lastUpdateTimeMs > 0 ? (timestampMs - this.lastUpdateTimeMs) / 1000 : 0.033;
     this.lastUpdateTimeMs = timestampMs;
 
@@ -105,12 +95,7 @@ export class PaperTracker {
     }
 
     // Check if any marker has exceeded hold time
-    const maxAge = Math.max(
-      timestampMs - recTL.lastSeenMs,
-      timestampMs - recTR.lastSeenMs,
-      timestampMs - recBR.lastSeenMs,
-      timestampMs - recBL.lastSeenMs,
-    );
+    const maxAge = Math.max(timestampMs - recTL.lastSeenMs, timestampMs - recTR.lastSeenMs, timestampMs - recBR.lastSeenMs, timestampMs - recBL.lastSeenMs);
 
     if (maxAge > this.config.holdDurationMs) {
       this.lastTrackingResult = this.createEmptyResult();
@@ -194,12 +179,7 @@ export class PaperTracker {
       if (p.y < minY) minY = p.y;
       if (p.y > maxY) maxY = p.y;
     }
-    const bboxPx: [number, number, number, number] = [
-      Math.floor(minX),
-      Math.floor(minY),
-      Math.ceil(maxX - minX),
-      Math.ceil(maxY - minY),
-    ];
+    const bboxPx: [number, number, number, number] = [Math.floor(minX), Math.floor(minY), Math.ceil(maxX - minX), Math.ceil(maxY - minY)];
 
     // Compute reprojection error of the 4 marker centers
     let reprojErrSum = 0;
@@ -274,12 +254,7 @@ export class PaperTracker {
       return false;
     }
     const mm = projectPoint(this.lastTrackingResult.cameraToMmH, cameraPt.x, cameraPt.y);
-    return (
-      mm.x >= 0 &&
-      mm.x <= this.config.sheetWidthMm &&
-      mm.y >= 0 &&
-      mm.y <= this.config.sheetHeightMm
-    );
+    return mm.x >= 0 && mm.x <= this.config.sheetWidthMm && mm.y >= 0 && mm.y <= this.config.sheetHeightMm;
   }
 
   /**

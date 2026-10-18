@@ -18,10 +18,7 @@ export class CvScope {
   public mat(): Mat;
   public mat(rows: number, cols: number, type: number): Mat;
   public mat(rows?: number, cols?: number, type?: number): Mat {
-    const m =
-      rows !== undefined && cols !== undefined && type !== undefined
-        ? new cv.Mat(rows, cols, type)
-        : new cv.Mat();
+    const m = rows !== undefined && cols !== undefined && type !== undefined ? new cv.Mat(rows, cols, type) : new cv.Mat();
     return this.manage(m);
   }
 

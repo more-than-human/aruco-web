@@ -3,14 +3,7 @@ import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-
 import { Tracker } from "./aruco-tracking/tracker.ts";
 import { initCamera, setupCameraSelector } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
-import {
-  LETTER_LANDSCAPE_HEIGHT,
-  LETTER_LANDSCAPE_WIDTH,
-  PaperTracker,
-  renderCorners,
-  renderPaperBoundary,
-  renderPaperStatus,
-} from "./digitize/index.ts";
+import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperTracker, renderCorners, renderPaperBoundary, renderPaperStatus } from "./digitize/index.ts";
 import { FpsTracker } from "./fps.ts";
 import { HandTracker } from "./hand-tracking/index.ts";
 import "./main.css";

@@ -8,11 +8,7 @@ const COLOR_CORNER = "#2979ff";
 /**
  * Renders the tracked physical paper boundary quadrilateral on the camera canvas overlay.
  */
-export function renderPaperBoundary(
-  ctx: CanvasRenderingContext2D,
-  boundary: PaperBoundary | null,
-  isHeld: boolean = false,
-): void {
+export function renderPaperBoundary(ctx: CanvasRenderingContext2D, boundary: PaperBoundary | null, isHeld: boolean = false): void {
   if (!boundary || !boundary.quadPx || boundary.quadPx.length < 4) return;
 
   const quad = boundary.quadPx;
@@ -47,10 +43,7 @@ export function renderPaperBoundary(
 /**
  * Renders ArUco marker boundaries and corners on the camera canvas.
  */
-export function renderCorners(
-  ctx: CanvasRenderingContext2D,
-  markers: TrackedMarker[],
-): void {
+export function renderCorners(ctx: CanvasRenderingContext2D, markers: TrackedMarker[]): void {
   ctx.save();
   ctx.lineWidth = 2;
 
@@ -85,12 +78,7 @@ export function renderCorners(
 /**
  * Renders paper status and workspace feedback onto the paper canvas.
  */
-export function renderPaperStatus(
-  ctx: CanvasRenderingContext2D,
-  tracking: PaperTrackingResult,
-  width: number,
-  height: number,
-): void {
+export function renderPaperStatus(ctx: CanvasRenderingContext2D, tracking: PaperTrackingResult, width: number, height: number): void {
   // Clear paper canvas
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
@@ -158,9 +146,7 @@ export function renderPaperStatus(
   ctx.font = "600 12px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  const title = tracking.isHeld
-    ? `Tracking (Held: ${tracking.visibleCount}/4)`
-    : `Paper Locked (${tracking.sheetMm[0]} × ${tracking.sheetMm[1]} mm)`;
+  const title = tracking.isHeld ? `Tracking (Held: ${tracking.visibleCount}/4)` : `Paper Locked (${tracking.sheetMm[0]} × ${tracking.sheetMm[1]} mm)`;
   ctx.fillText(title, badgeX + 28, badgeY + 16);
 
   ctx.fillStyle = "#64748b";
