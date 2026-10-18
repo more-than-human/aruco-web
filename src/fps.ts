@@ -20,8 +20,7 @@ export class FpsTracker {
     const frameMs = now - this.lastFrameTime;
     this.lastFrameTime = now;
 
-    this.smoothedFrameMs =
-      this.smoothedFrameMs === null ? frameMs : EMA_ALPHA * frameMs + (1 - EMA_ALPHA) * this.smoothedFrameMs;
+    this.smoothedFrameMs = this.smoothedFrameMs === null ? frameMs : EMA_ALPHA * frameMs + (1 - EMA_ALPHA) * this.smoothedFrameMs;
 
     if (this.element && this.smoothedFrameMs > 0) {
       this.element.textContent = `${(1000 / this.smoothedFrameMs).toFixed(1)} FPS`;
