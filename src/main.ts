@@ -3,8 +3,14 @@ import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-
 import { Tracker } from "./aruco-tracking/tracker.ts";
 import { initCamera, setupCameraSelector } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
-import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperDigitizer } from "./draw/index.ts";
-import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
+import {
+  LETTER_LANDSCAPE_HEIGHT,
+  LETTER_LANDSCAPE_WIDTH,
+  PaperTracker,
+  renderCorners,
+  renderPaperBoundary,
+  renderPaperStatus,
+} from "./digitize/index.ts";
 import { FpsTracker } from "./fps.ts";
 import { HandTracker } from "./hand-tracking/index.ts";
 import "./main.css";
@@ -67,12 +73,9 @@ window.addEventListener("load", async () => {
     detector: wasmDetector,
   });
 
-  const digitizer = new PaperDigitizer(DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT, {
-    temporal: {
-      motionThreshold: 1000, // Tolerant to residual jitter
-      requiredStableFrames: 0, // Faster ink confirmation
-      blendAlpha: 0.1,
-    },
+  const paperTracker = new PaperTracker({
+    canvasWidth: DIGITIZED_PAPER_WIDTH,
+    canvasHeight: DIGITIZED_PAPER_HEIGHT,
   });
 
   // Layer 1: Hand cursor on top DOM layer (simple red circle, minimum styling)
@@ -121,7 +124,7 @@ window.addEventListener("load", async () => {
     video,
     () => {
       tracker.reset();
-      digitizer.reset();
+      paperTracker.reset();
       cursor.hide();
     },
     {
@@ -130,7 +133,7 @@ window.addEventListener("load", async () => {
     },
   );
 
-  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, digitizer);
+  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker);
 
   // Initialize and start hand tracking asynchronously
   handTracker
@@ -149,7 +152,7 @@ function startDetectionLoop(
   canvas: HTMLCanvasElement,
   paperCanvas: HTMLCanvasElement,
   tracker: Tracker,
-  digitizer: PaperDigitizer,
+  paperTracker: PaperTracker,
 ): void {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const paperCtx = paperCanvas.getContext("2d", { willReadFrequently: true })!;
@@ -161,14 +164,15 @@ function startDetectionLoop(
 
     ctx.drawImage(video, 0, 0, video.width, video.height);
     const imageData = ctx.getImageData(0, 0, video.width, video.height);
-    const markers = tracker.detect(imageData, performance.now());
+    const now = performance.now();
+    const markers = tracker.detect(imageData, now);
+    const tracking = paperTracker.update(markers, now);
 
-    const { digitizedImage, warpModel } = digitizer.processFrame(imageData, markers);
-    paperCtx.putImageData(digitizedImage, 0, 0);
+    renderPaperStatus(paperCtx, tracking, DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT);
 
     renderCorners(ctx, markers);
-    if (warpModel) {
-      renderPaperBoundary(ctx, warpModel);
+    if (tracking.isTracking) {
+      renderPaperBoundary(ctx, tracking.boundary, tracking.isHeld);
     }
 
     requestAnimationFrame(update);
