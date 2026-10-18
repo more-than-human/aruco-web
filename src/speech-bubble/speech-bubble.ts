@@ -1,4 +1,4 @@
-import type { SpeechRecognitionErrorCodeLike } from "../speech/index.ts";
+import type { SpeechRecognitionErrorCode } from "../speech/index.ts";
 import "./speech-bubble.css";
 import type { SpeechBubbleConfig, SpeechSource } from "./types.ts";
 
@@ -267,7 +267,7 @@ export class SpeechBubble {
     }, this.autoHideDelayMs);
   }
 
-  private describeError(error: SpeechRecognitionErrorCodeLike): string {
+  private describeError(error: SpeechRecognitionErrorCode): string {
     switch (error) {
       case "not-allowed":
       case "service-not-allowed":

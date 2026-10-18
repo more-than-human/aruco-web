@@ -1,7 +1,7 @@
 import type {
   SpeechEndEvent,
   SpeechErrorEvent,
-  SpeechRecognitionErrorCodeLike,
+  SpeechRecognitionErrorCode,
   SpeechRecognizerConfig,
   SpeechRecognizerEvent,
   SpeechRecognizerEventHandler,
@@ -9,68 +9,17 @@ import type {
   SpeechStartEvent,
 } from "./types.ts";
 
-/**
- * Thin, typed wrapper around the Web Speech API's SpeechRecognition interface.
- *
- * The API is vendor-prefixed in Chromium-based browsers (`webkitSpeechRecognition`)
- * and not implemented in Firefox, so we resolve the constructor defensively and expose
- * `isSupported` for graceful degradation.
- *
- * @see https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API
- */
-
-// Minimal structural typings for the Web Speech API surface.
-interface SpeechRecognitionAlternativeLike {
-  readonly transcript: string;
-  readonly confidence: number;
-}
-
-interface SpeechRecognitionResultLike {
-  readonly isFinal: boolean;
-  readonly length: number;
-  [index: number]: SpeechRecognitionAlternativeLike;
-}
-
-interface SpeechRecognitionResultListLike {
-  readonly length: number;
-  [index: number]: SpeechRecognitionResultLike;
-}
-
-interface SpeechRecognitionEventLike extends Event {
-  readonly resultIndex: number;
-  readonly results: SpeechRecognitionResultListLike;
-}
-
-interface SpeechRecognitionErrorEventLike extends Event {
-  readonly error: SpeechRecognitionErrorCodeLike;
-  readonly message: string;
-}
-
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-}
-
-type SpeechRecognitionConstructorLike = new () => SpeechRecognitionLike;
-
-function resolveConstructor(): SpeechRecognitionConstructorLike | null {
+function resolveConstructor(): (new () => SpeechRecognition) | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const candidate = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionConstructorLike;
-    webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
-  };
-  return candidate.SpeechRecognition ?? candidate.webkitSpeechRecognition ?? null;
+  if (typeof SpeechRecognition !== "undefined") {
+    return SpeechRecognition;
+  }
+  if (typeof webkitSpeechRecognition !== "undefined") {
+    return webkitSpeechRecognition;
+  }
+  return null;
 }
 
 /**
@@ -78,7 +27,7 @@ function resolveConstructor(): SpeechRecognitionConstructorLike | null {
  */
 export class SpeechRecognizer {
   private readonly Constructor = resolveConstructor();
-  private recognition: SpeechRecognitionLike | null = null;
+  private recognition: SpeechRecognition | null = null;
 
   private handlers: SpeechRecognizerEventHandler[] = [];
   private finalText = "";
@@ -210,7 +159,7 @@ export class SpeechRecognizer {
     this.handlers = [];
   }
 
-  private createRecognition(): SpeechRecognitionLike {
+  private createRecognition(): SpeechRecognition {
     const recognition = new this.Constructor!();
     recognition.lang = this.lang;
     recognition.continuous = this.continuous;
@@ -232,7 +181,7 @@ export class SpeechRecognizer {
     }
   }
 
-  private handleResult(event: SpeechRecognitionEventLike): void {
+  private handleResult(event: SpeechRecognitionEvent): void {
     if (!event.results || event.results.length === 0) {
       return;
     }
@@ -284,7 +233,7 @@ export class SpeechRecognizer {
     });
   }
 
-  private handleError(event: SpeechRecognitionErrorEventLike): void {
+  private handleError(event: SpeechRecognitionErrorEvent): void {
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       this.stopping = true;
     }
@@ -318,7 +267,7 @@ export class SpeechRecognizer {
 export type {
   SpeechEndEvent,
   SpeechErrorEvent,
-  SpeechRecognitionErrorCodeLike,
+  SpeechRecognitionErrorCode,
   SpeechRecognizerConfig,
   SpeechRecognizerEvent,
   SpeechRecognizerEventHandler,

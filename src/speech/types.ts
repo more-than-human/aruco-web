@@ -2,9 +2,6 @@
  * Types and interfaces for the Speech Recognition system (Voice -> Text).
  */
 
-export type SpeechRecognitionErrorCodeLike =
-  "no-speech" | "aborted" | "audio-capture" | "network" | "not-allowed" | "service-not-allowed" | "bad-grammar" | "language-not-supported";
-
 export interface SpeechStartEvent {
   type: "start";
 }
@@ -23,13 +20,15 @@ export interface SpeechResultEvent {
 
 export interface SpeechErrorEvent {
   type: "error";
-  error: SpeechRecognitionErrorCodeLike;
+  error: SpeechRecognitionErrorCode;
   message: string;
 }
 
 export interface SpeechEndEvent {
   type: "end";
 }
+
+export type SpeechRecognitionErrorCode = globalThis.SpeechRecognitionErrorCode;
 
 export type SpeechRecognizerEvent = SpeechStartEvent | SpeechResultEvent | SpeechErrorEvent | SpeechEndEvent;
 
