@@ -73,3 +73,23 @@ export async function setupCameraSelector(videoElement: HTMLVideoElement, onCame
     console.error("Error enumerating devices:", err);
   }
 }
+
+export function setupControlButtons(): void {
+  const printBtn = document.getElementById("print-btn");
+  const helpBtn = document.getElementById("help-btn");
+
+  printBtn?.addEventListener("click", () => {
+    const link = document.createElement("a");
+    link.href = `${import.meta.env.BASE_URL}tracking-paper.pdf`;
+    link.download = "tracking-paper.pdf";
+    link.click();
+  });
+
+  helpBtn?.addEventListener("click", () => {
+    window.open(
+      "https://github.com/more-than-human/aruco-web/blob/master/README.md",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+}

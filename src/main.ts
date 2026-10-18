@@ -2,7 +2,7 @@ import arucoWatBytes from "./aruco-tracking/aruco-simd.wat";
 import { initArUcoWasm, Detector as WasmDetector } from "./aruco-tracking/aruco-wasm.ts";
 import { Tracker } from "./aruco-tracking/tracker.ts";
 import { ScreenBoardManager, viewportToCanvasPoint } from "./board/index.ts";
-import { initCamera, setupCameraSelector } from "./camera.ts";
+import { initCamera, setupCameraSelector, setupControlButtons } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
 import {
   initOpenCV,
@@ -153,6 +153,8 @@ window.addEventListener("load", async () => {
       idealHeight: VIDEO_HEIGHT,
     },
   );
+
+  setupControlButtons();
 
   startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker, inkDigitizer, boardManager, () => ({
     screenPos: latestPointerScreenPos,

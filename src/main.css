@@ -86,3 +86,7 @@ html {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+#camera-controls button {
+  cursor: pointer;
+}
