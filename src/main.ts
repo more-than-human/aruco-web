@@ -2,6 +2,7 @@ import { initCamera, setupCameraSelector } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
 import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperDigitizer } from "./draw/index.ts";
 import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
+import { FpsTracker } from "./fps.ts";
 import { HandTracker } from "./hand-tracking/index.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
@@ -153,7 +154,11 @@ function startDetectionLoop(
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const paperCtx = paperCanvas.getContext("2d", { willReadFrequently: true })!;
 
+  const fpsTracker = new FpsTracker("frame-counter");
+
   const update = () => {
+    fpsTracker.update();
+
     ctx.drawImage(video, 0, 0, video.width, video.height);
     const imageData = ctx.getImageData(0, 0, video.width, video.height);
     const markers = tracker.detect(imageData, performance.now());
