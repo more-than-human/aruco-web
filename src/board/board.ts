@@ -67,11 +67,7 @@ export function viewportToCanvasPoint(screenPos: Point2D, canvas: HTMLCanvasElem
 /**
  * Tests if a screen coordinate intersects a placed screen segment.
  */
-export function isPointInScreenSegment(
-  seg: ScreenSegment,
-  point: Point2D,
-  ctx: CanvasRenderingContext2D,
-): boolean {
+export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, ctx: CanvasRenderingContext2D): boolean {
   const dx = point.x - seg.x;
   const dy = point.y - seg.y;
   const pad = 16;
@@ -86,9 +82,7 @@ export function isPointInScreenSegment(
   ctx.save();
   ctx.resetTransform();
   ctx.lineWidth = 20 / (seg.scale || 1);
-  const inPath =
-    ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") ||
-    ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
+  const inPath = ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") || ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
   ctx.restore();
 
   const isSmall = seg.width <= 48 && seg.height <= 48;
@@ -152,11 +146,7 @@ export class ScreenBoardManager {
   }
 
   public isHoveringOrInteracting(): boolean {
-    return (
-      this.floatingCopy !== null ||
-      this.draggingSegment !== null ||
-      this.screenSegments.some((s) => s.isHovered)
-    );
+    return this.floatingCopy !== null || this.draggingSegment !== null || this.screenSegments.some((s) => s.isHovered);
   }
 
   public getHoveredSegment(): ScreenSegment | null {
@@ -166,11 +156,7 @@ export class ScreenBoardManager {
   /**
    * Main per-frame update and render call.
    */
-  public update(
-    paperSegments: DrawingSegment[],
-    paperCanvas: HTMLCanvasElement,
-    fingerScreenPos?: Point2D | null,
-  ): void {
+  public update(paperSegments: DrawingSegment[], paperCanvas: HTMLCanvasElement, fingerScreenPos?: Point2D | null): void {
     this.latestPaperCanvas = paperCanvas;
     this.latestPaperSegments = paperSegments;
     this.latestFingerScreenPos = fingerScreenPos ?? null;
@@ -189,14 +175,8 @@ export class ScreenBoardManager {
 
     for (let i = this.screenSegments.length - 1; i >= 0; i--) {
       const seg = this.screenSegments[i];
-      const hitMouse =
-        !mouseHit && this.mouseScreenPos
-          ? isPointInScreenSegment(seg, this.mouseScreenPos, this.ctx)
-          : false;
-      const hitFinger =
-        !fingerHit && fingerScreenPos
-          ? isPointInScreenSegment(seg, fingerScreenPos, this.ctx)
-          : false;
+      const hitMouse = !mouseHit && this.mouseScreenPos ? isPointInScreenSegment(seg, this.mouseScreenPos, this.ctx) : false;
+      const hitFinger = !fingerHit && fingerScreenPos ? isPointInScreenSegment(seg, fingerScreenPos, this.ctx) : false;
 
       if (hitMouse) mouseHit = seg;
       if (hitFinger) fingerHit = seg;
