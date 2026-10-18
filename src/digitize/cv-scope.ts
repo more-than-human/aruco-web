@@ -1,4 +1,5 @@
-import cv, { type Mat, type MatVector } from "@techstark/opencv-js";
+import type { CV, Mat, MatVector } from "@techstark/opencv-js";
+import { getCv } from "./opencv.ts";
 
 /**
  * RAII Scope Manager for OpenCV.js WebAssembly memory.
@@ -6,11 +7,18 @@ import cv, { type Mat, type MatVector } from "@techstark/opencv-js";
  * Follows digitizer-v2.md Section 3.3.
  */
 export class CvScope {
+  public readonly cv: CV;
   private disposables: Array<{ delete(): void }> = [];
 
-  /** Track an OpenCV object for automatic deletion */
-  public manage<T extends { delete(): void }>(obj: T): T {
-    this.disposables.push(obj);
+  constructor(cvInstance?: CV) {
+    this.cv = cvInstance || getCv();
+  }
+
+  /** Track an OpenCV object for automatic deletion if it has a delete() method */
+  public manage<T>(obj: T): T {
+    if (obj && typeof (obj as { delete?: () => void }).delete === "function") {
+      this.disposables.push(obj as unknown as { delete(): void });
+    }
     return obj;
   }
 
@@ -18,13 +26,13 @@ export class CvScope {
   public mat(): Mat;
   public mat(rows: number, cols: number, type: number): Mat;
   public mat(rows?: number, cols?: number, type?: number): Mat {
-    const m = rows !== undefined && cols !== undefined && type !== undefined ? new cv.Mat(rows, cols, type) : new cv.Mat();
+    const m = rows !== undefined && cols !== undefined && type !== undefined ? new this.cv.Mat(rows, cols, type) : new this.cv.Mat();
     return this.manage(m);
   }
 
   /** Create a MatVector tracked by this scope */
   public matVector(): MatVector {
-    return this.manage(new cv.MatVector());
+    return this.manage(new this.cv.MatVector());
   }
 
   /** Free all tracked objects in reverse order of allocation */
@@ -40,8 +48,8 @@ export class CvScope {
   }
 
   /** Execute a function within a managed OpenCV memory scope */
-  public static use<R>(block: (scope: CvScope) => R): R {
-    const scope = new CvScope();
+  public static use<R>(block: (scope: CvScope) => R, cvInstance?: CV): R {
+    const scope = new CvScope(cvInstance);
     try {
       return block(scope);
     } finally {

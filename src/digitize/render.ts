@@ -1,5 +1,6 @@
 import type { TrackedMarker } from "../aruco-tracking/tracker.ts";
 import type { PaperBoundary, PaperTrackingResult } from "./types.ts";
+import type { VectorShape } from "./vectorizer.ts";
 
 const COLOR_LOCKED = "#00e676";
 const COLOR_HELD = "#ffab00";
@@ -76,9 +77,17 @@ export function renderCorners(ctx: CanvasRenderingContext2D, markers: TrackedMar
 }
 
 /**
- * Renders paper status and workspace feedback onto the paper canvas.
+ * Renders paper status, workspace feedback, and vectorized ink paths onto the paper canvas.
  */
-export function renderPaperStatus(ctx: CanvasRenderingContext2D, tracking: PaperTrackingResult, width: number, height: number): void {
+export function renderPaperStatus(
+  ctx: CanvasRenderingContext2D,
+  tracking: PaperTrackingResult,
+  width: number,
+  height: number,
+  path2d: Path2D | null = null,
+  vectorShape: VectorShape | null = null,
+  durationMs: number = 0,
+): void {
   // Clear paper canvas
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
@@ -120,13 +129,19 @@ export function renderPaperStatus(ctx: CanvasRenderingContext2D, tracking: Paper
     ctx.strokeRect(box.x, box.y, box.width, box.height);
   }
 
-  // Status Badge in top-right
-  const badgeX = width - 260;
-  const badgeY = 28;
-  const badgeW = 232;
-  const badgeH = 44;
+  // Render vectorized ink paths using fill-rule evenodd
+  if (path2d) {
+    ctx.fillStyle = "#0f172a";
+    ctx.fill(path2d, "evenodd");
+  }
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+  // Status Badge in top-right
+  const badgeX = width - 280;
+  const badgeY = 24;
+  const badgeW = 256;
+  const badgeH = 46;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
   ctx.strokeStyle = "#e2e8f0";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -151,7 +166,12 @@ export function renderPaperStatus(ctx: CanvasRenderingContext2D, tracking: Paper
 
   ctx.fillStyle = "#64748b";
   ctx.font = "400 10px system-ui, -apple-system, sans-serif";
-  ctx.fillText("Phase 1: Basic Paper Tracking Ready", badgeX + 28, badgeY + 30);
+  const outlineCount = vectorShape?.outlineCount ?? 0;
+  const subtitle =
+    outlineCount > 0
+      ? `Vectorized: ${outlineCount} path${outlineCount === 1 ? "" : "s"} (${durationMs.toFixed(0)}ms)`
+      : `Phase 2: Vectorizer active (${durationMs.toFixed(0)}ms)`;
+  ctx.fillText(subtitle, badgeX + 28, badgeY + 31);
 
   ctx.restore();
 }

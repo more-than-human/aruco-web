@@ -1,9 +1,18 @@
 import arucoWatBytes from "./aruco-tracking/aruco-simd.wat";
-import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-wasm.ts";
+import { initArUcoWasm, Detector as WasmDetector } from "./aruco-tracking/aruco-wasm.ts";
 import { Tracker } from "./aruco-tracking/tracker.ts";
 import { initCamera, setupCameraSelector } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
-import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperTracker, renderCorners, renderPaperBoundary, renderPaperStatus } from "./digitize/index.ts";
+import {
+  initOpenCV,
+  InkDigitizer,
+  LETTER_LANDSCAPE_HEIGHT,
+  LETTER_LANDSCAPE_WIDTH,
+  PaperTracker,
+  renderCorners,
+  renderPaperBoundary,
+  renderPaperStatus,
+} from "./digitize/index.ts";
 import { FpsTracker } from "./fps.ts";
 import { HandTracker } from "./hand-tracking/index.ts";
 import "./main.css";
@@ -53,7 +62,7 @@ window.addEventListener("load", async () => {
   paperCanvas.width = DIGITIZED_PAPER_WIDTH;
   paperCanvas.height = DIGITIZED_PAPER_HEIGHT;
 
-  await initArUcoWasm(arucoWatBytes);
+  await Promise.all([initArUcoWasm(arucoWatBytes), initOpenCV()]);
 
   const wasmDetector = new WasmDetector({
     dictionaryName: DICTIONARY_NAME,
@@ -70,6 +79,8 @@ window.addEventListener("load", async () => {
     canvasWidth: DIGITIZED_PAPER_WIDTH,
     canvasHeight: DIGITIZED_PAPER_HEIGHT,
   });
+
+  const inkDigitizer = new InkDigitizer();
 
   // Layer 1: Hand cursor on top DOM layer (simple red circle, minimum styling)
   const cursor = new Cursor({
@@ -118,6 +129,7 @@ window.addEventListener("load", async () => {
     () => {
       tracker.reset();
       paperTracker.reset();
+      inkDigitizer.reset();
       cursor.hide();
     },
     {
@@ -126,7 +138,7 @@ window.addEventListener("load", async () => {
     },
   );
 
-  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker);
+  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker, inkDigitizer);
 
   // Initialize and start hand tracking asynchronously
   handTracker
@@ -146,6 +158,7 @@ function startDetectionLoop(
   paperCanvas: HTMLCanvasElement,
   tracker: Tracker,
   paperTracker: PaperTracker,
+  inkDigitizer: InkDigitizer,
 ): void {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const paperCtx = paperCanvas.getContext("2d", { willReadFrequently: true })!;
@@ -161,7 +174,19 @@ function startDetectionLoop(
     const markers = tracker.detect(imageData, now);
     const tracking = paperTracker.update(markers, now);
 
-    renderPaperStatus(paperCtx, tracking, DIGITIZED_PAPER_WIDTH, DIGITIZED_PAPER_HEIGHT);
+    if (tracking.isTracking) {
+      inkDigitizer.processFrame(imageData, tracking, now);
+    }
+
+    renderPaperStatus(
+      paperCtx,
+      tracking,
+      DIGITIZED_PAPER_WIDTH,
+      DIGITIZED_PAPER_HEIGHT,
+      inkDigitizer.getLatestPath2D(),
+      inkDigitizer.getLatestVectorShape(),
+      inkDigitizer.getLastDurationMs(),
+    );
 
     renderCorners(ctx, markers);
     if (tracking.isTracking) {

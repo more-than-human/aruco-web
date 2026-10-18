@@ -1,0 +1,4 @@
+1. minimum css styling, use system default styles when possible. use system font, avoid drop shadow and gradients.
+2. prefer semantic variable and function names over verbose comments. use comments only to explain why something is done when non-obvious.
+3. modularize the code into cohesive files. decouple components by features so changing one thing doesn't require touching unrelated code
+4. individual files should be organized from general to specific, start with constants, then high level functions, then pure helpers in the end.
