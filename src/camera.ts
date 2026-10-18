@@ -86,10 +86,6 @@ export function setupControlButtons(): void {
   });
 
   helpBtn?.addEventListener("click", () => {
-    window.open(
-      "https://github.com/more-than-human/aruco-web/blob/master/README.md",
-      "_blank",
-      "noopener,noreferrer",
-    );
+    window.open("https://github.com/more-than-human/aruco-web/blob/master/README.md", "_blank", "noopener,noreferrer");
   });
 }
