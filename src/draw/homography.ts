@@ -43,10 +43,19 @@ export class PaperGeometry {
 
   public computeWarpModel(markers: (Marker | TrackedMarker)[]): PaperWarpModel | null {
     // Update last known locations with currently detected/available markers (IDs 0..3)
+    let visibleMarkerCount = 0;
     for (const m of markers) {
       if (m.id >= 0 && m.id <= 3 && m.corners && m.corners.length === 4) {
         this.lastKnownMarkers.set(m.id, m);
+        visibleMarkerCount++;
       }
+    }
+
+    // Paper is only tracked while at least one corner marker is currently visible.
+    // With 0 markers present, treat the paper as absent (do not coast on stale data).
+    if (visibleMarkerCount === 0) {
+      this.lastKnownMarkers.clear();
+      return null;
     }
 
     const m1 = this.lastKnownMarkers.get(0);
