@@ -1,10 +1,12 @@
 import type { TrackedMarker } from "../aruco-tracking/tracker.ts";
-import type { PaperBoundary, PaperTrackingResult } from "./types.ts";
-import type { VectorShape } from "./vectorizer.ts";
+import type { DrawingSegment, PaperBoundary, PaperTrackingResult, Point2D } from "./types.ts";
 
 const COLOR_LOCKED = "#00e676";
 const COLOR_HELD = "#ffab00";
 const COLOR_CORNER = "#2979ff";
+const COLOR_ACTIVE_STROKE = "#2563eb";
+const COLOR_ACTIVE_FILL = "#1e3a8a";
+const COLOR_INK = "#0f172a";
 
 /**
  * Renders the tracked physical paper boundary quadrilateral on the camera canvas overlay.
@@ -77,15 +79,16 @@ export function renderCorners(ctx: CanvasRenderingContext2D, markers: TrackedMar
 }
 
 /**
- * Renders paper status, workspace feedback, and vectorized ink paths onto the paper canvas.
+ * Renders paper status, workspace feedback, and segmented vectorized ink paths onto the paper canvas.
  */
 export function renderPaperStatus(
   ctx: CanvasRenderingContext2D,
   tracking: PaperTrackingResult,
   width: number,
   height: number,
-  path2d: Path2D | null = null,
-  vectorShape: VectorShape | null = null,
+  segments: DrawingSegment[] = [],
+  pointerPos: Point2D | null = null,
+  activeSegment: DrawingSegment | null = null,
   durationMs: number = 0,
 ): void {
   // Clear paper canvas
@@ -129,16 +132,47 @@ export function renderPaperStatus(
     ctx.strokeRect(box.x, box.y, box.width, box.height);
   }
 
-  // Render vectorized ink paths using fill-rule evenodd
-  if (path2d) {
-    ctx.fillStyle = "#0f172a";
-    ctx.fill(path2d, "evenodd");
+  // Render segmented vectorized ink paths
+  for (const seg of segments) {
+    if (seg.isActive) {
+      // Active segment: stroke color blue to indicate active segment
+      ctx.fillStyle = COLOR_ACTIVE_FILL;
+      ctx.fill(seg.path2d, "evenodd");
+      ctx.strokeStyle = COLOR_ACTIVE_STROKE;
+      ctx.lineWidth = 3.5;
+      ctx.stroke(seg.path2d);
+
+      // Render segment identifier label
+      const [bx, by] = seg.bboxPx;
+      ctx.save();
+      ctx.fillStyle = COLOR_ACTIVE_STROKE;
+      ctx.font = "600 12px system-ui, -apple-system, sans-serif";
+      ctx.fillText(seg.id, bx, Math.max(16, by - 6));
+      ctx.restore();
+    } else {
+      // Inactive segment: default dark ink fill
+      ctx.fillStyle = COLOR_INK;
+      ctx.fill(seg.path2d, "evenodd");
+    }
+  }
+
+  // Render pointer location on paper canvas (subtle halo)
+  if (pointerPos) {
+    ctx.save();
+    ctx.fillStyle = "rgba(37, 99, 235, 0.25)";
+    ctx.beginPath();
+    ctx.arc(pointerPos.x, pointerPos.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLOR_ACTIVE_STROKE;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Status Badge in top-right
-  const badgeX = width - 280;
+  const badgeX = width - 290;
   const badgeY = 24;
-  const badgeW = 256;
+  const badgeW = 266;
   const badgeH = 46;
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
@@ -164,13 +198,14 @@ export function renderPaperStatus(
   const title = tracking.isHeld ? `Tracking (Held: ${tracking.visibleCount}/4)` : `Paper Locked (${tracking.sheetMm[0]} × ${tracking.sheetMm[1]} mm)`;
   ctx.fillText(title, badgeX + 28, badgeY + 16);
 
-  ctx.fillStyle = "#64748b";
-  ctx.font = "400 10px system-ui, -apple-system, sans-serif";
-  const outlineCount = vectorShape?.outlineCount ?? 0;
-  const subtitle =
-    outlineCount > 0
-      ? `Vectorized: ${outlineCount} path${outlineCount === 1 ? "" : "s"} (${durationMs.toFixed(0)}ms)`
-      : `Phase 2: Vectorizer active (${durationMs.toFixed(0)}ms)`;
+  ctx.fillStyle = activeSegment ? COLOR_ACTIVE_STROKE : "#64748b";
+  ctx.font = "500 10px system-ui, -apple-system, sans-serif";
+  const segmentCount = segments.length;
+  const subtitle = activeSegment
+    ? `Active: ${activeSegment.id} (${activeSegment.inkAreaMm2.toFixed(0)} mm²)`
+    : segmentCount > 0
+      ? `${segmentCount} segment${segmentCount === 1 ? "" : "s"} (${durationMs.toFixed(0)}ms)`
+      : `No ink detected (${durationMs.toFixed(0)}ms)`;
   ctx.fillText(subtitle, badgeX + 28, badgeY + 31);
 
   ctx.restore();

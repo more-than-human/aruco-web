@@ -85,3 +85,19 @@ export interface PaperTrackingResult {
   /** Pixels per mm along X and Y */
   pxPerMm: [number, number];
 }
+
+export interface DrawingSegment {
+  id: string;
+  /** Bounding box [x, y, width, height] in canvas pixels */
+  bboxPx: [number, number, number, number];
+  /** Bounding box [x, y, width, height] in paper millimeters */
+  bboxMm: [number, number, number, number];
+  /** Total ink area in square millimeters */
+  inkAreaMm2: number;
+  /** SVG path d string in canvas coordinates */
+  svgPath: string;
+  /** Cached Path2D in canvas coordinates */
+  path2d: Path2D;
+  /** Whether the finger pointer currently intersects this segment */
+  isActive: boolean;
+}

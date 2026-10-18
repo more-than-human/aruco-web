@@ -5,6 +5,8 @@ export { extractInkMask, type InkExtractorOptions } from "./ink-extractor.ts";
 export { getCv, initOpenCV, isOpenCVReady } from "./opencv.ts";
 export { PaperTracker } from "./paper-tracker.ts";
 export { renderCorners, renderPaperBoundary, renderPaperStatus } from "./render.ts";
+export { boxIoU, SegmentTracker } from "./segment-tracker.ts";
+export { segmentDrawings, type SegmenterOptions } from "./segmenter.ts";
 export {
   DEFAULT_SHEET_CONFIG,
   DIGITIZING_ZONE_EXTEND_MM,
@@ -16,5 +18,5 @@ export {
   MARKER_SIZE_MM,
   PAPER_EDGE_PADDING_MM,
 } from "./types.ts";
-export type { PaperBoundary, PaperSheetConfig, PaperTrackingResult, Point2D, Rect } from "./types.ts";
+export type { DrawingSegment, PaperBoundary, PaperSheetConfig, PaperTrackingResult, Point2D, Rect } from "./types.ts";
 export { applyChaikin, densifyPolygon, offsetOutward, traceContoursChaikin, type VectorizerOptions, type VectorShape } from "./vectorizer.ts";

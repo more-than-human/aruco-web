@@ -9,6 +9,7 @@ import {
   LETTER_LANDSCAPE_HEIGHT,
   LETTER_LANDSCAPE_WIDTH,
   PaperTracker,
+  type Point2D,
   renderCorners,
   renderPaperBoundary,
   renderPaperStatus,
@@ -91,6 +92,9 @@ window.addEventListener("load", async () => {
     visible: false,
   });
 
+  let latestPointerScreenPos: Point2D | null = null;
+  let latestFingerTipNorm: Point2D | null = null;
+
   // Hand tracking engine for index finger tracking
   const handTracker = new HandTracker({
     cameraCanvas,
@@ -100,12 +104,18 @@ window.addEventListener("load", async () => {
       if (result.hasHand && result.screenPosition) {
         cursor.setPosition(result.screenPosition.x, result.screenPosition.y);
         cursor.show();
+        latestPointerScreenPos = result.screenPosition;
+        latestFingerTipNorm = result.indexFingerTip ? { x: result.indexFingerTip.x, y: result.indexFingerTip.y } : null;
       } else {
         cursor.hide();
+        latestPointerScreenPos = null;
+        latestFingerTipNorm = null;
       }
     },
     onLost: () => {
       cursor.hide();
+      latestPointerScreenPos = null;
+      latestFingerTipNorm = null;
     },
   });
 
@@ -131,6 +141,8 @@ window.addEventListener("load", async () => {
       paperTracker.reset();
       inkDigitizer.reset();
       cursor.hide();
+      latestPointerScreenPos = null;
+      latestFingerTipNorm = null;
     },
     {
       idealWidth: VIDEO_WIDTH,
@@ -138,7 +150,10 @@ window.addEventListener("load", async () => {
     },
   );
 
-  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker, inkDigitizer);
+  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker, inkDigitizer, () => ({
+    screenPos: latestPointerScreenPos,
+    fingerTipNorm: latestFingerTipNorm,
+  }));
 
   // Initialize and start hand tracking asynchronously
   handTracker
@@ -159,6 +174,7 @@ function startDetectionLoop(
   tracker: Tracker,
   paperTracker: PaperTracker,
   inkDigitizer: InkDigitizer,
+  getPointerState: () => { screenPos: Point2D | null; fingerTipNorm: Point2D | null },
 ): void {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const paperCtx = paperCanvas.getContext("2d", { willReadFrequently: true })!;
@@ -178,13 +194,28 @@ function startDetectionLoop(
       inkDigitizer.processFrame(imageData, tracking, now);
     }
 
+    const { screenPos, fingerTipNorm } = getPointerState();
+
+    const screenCanvasPos = screenPos ? viewportToCanvasPoint(screenPos, paperCanvas) : null;
+    const physicalCanvasPos =
+      fingerTipNorm && tracking.isTracking
+        ? paperTracker.cameraToCanvas({
+            x: fingerTipNorm.x * video.width,
+            y: fingerTipNorm.y * video.height,
+          })
+        : null;
+
+    const pointerCanvasPos = screenCanvasPos ?? physicalCanvasPos;
+    const activeSegment = inkDigitizer.updatePointer(pointerCanvasPos, paperCtx);
+
     renderPaperStatus(
       paperCtx,
       tracking,
       DIGITIZED_PAPER_WIDTH,
       DIGITIZED_PAPER_HEIGHT,
-      inkDigitizer.getLatestPath2D(),
-      inkDigitizer.getLatestVectorShape(),
+      inkDigitizer.getSegments(),
+      pointerCanvasPos,
+      activeSegment,
       inkDigitizer.getLastDurationMs(),
     );
 
@@ -197,4 +228,45 @@ function startDetectionLoop(
   };
 
   requestAnimationFrame(update);
+}
+
+/**
+ * Maps a screen viewport coordinate (CSS pixels) to paper canvas coordinate space
+ * taking into account element bounding rect and CSS object-fit: contain letterboxing.
+ */
+function viewportToCanvasPoint(screenPos: Point2D, canvas: HTMLCanvasElement): Point2D | null {
+  const rect = canvas.getBoundingClientRect();
+  const containerW = rect.width;
+  const containerH = rect.height;
+  if (containerW === 0 || containerH === 0) return null;
+
+  const canvasW = canvas.width;
+  const canvasH = canvas.height;
+  const canvasAspect = canvasW / canvasH;
+  const containerAspect = containerW / containerH;
+
+  let renderedW: number;
+  let renderedH: number;
+  let offsetX: number;
+  let offsetY: number;
+
+  if (containerAspect > canvasAspect) {
+    renderedH = containerH;
+    renderedW = containerH * canvasAspect;
+    offsetX = rect.left + (containerW - renderedW) * 0.5;
+    offsetY = rect.top;
+  } else {
+    renderedW = containerW;
+    renderedH = containerW / canvasAspect;
+    offsetX = rect.left;
+    offsetY = rect.top + (containerH - renderedH) * 0.5;
+  }
+
+  const cx = ((screenPos.x - offsetX) / renderedW) * canvasW;
+  const cy = ((screenPos.y - offsetY) / renderedH) * canvasH;
+
+  if (cx >= 0 && cx <= canvasW && cy >= 0 && cy <= canvasH) {
+    return { x: cx, y: cy };
+  }
+  return null;
 }

@@ -135,13 +135,15 @@ export function offsetOutward(pts: Point2D[], maskData: Uint8Array, w: number, h
  * Converts a binary ink Mat (255=ink, 0=paper) into smooth SVG vector paths
  * formatted for rendering with `fill-rule="evenodd"`.
  */
-export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: VectorizerOptions): VectorShape {
+export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: VectorizerOptions, offset?: Point2D): VectorShape {
   const turdsizePx = options?.turdsizePx ?? 10;
   const approxEpsilonMm = options?.approxEpsilonMm ?? 0.2;
   const chaikinIterations = options?.chaikinIterations ?? 2;
   const smoothKernelMm = options?.smoothKernelMm ?? 0.75;
   const smoothBlurMm = options?.smoothBlurMm ?? 0.5;
   const outwardOffsetPx = options?.outwardOffsetPx ?? 0.5;
+  const offsetX = offset?.x ?? 0;
+  const offsetY = offset?.y ?? 0;
 
   return CvScope.use((scope) => {
     const cv = scope.cv;
@@ -209,9 +211,9 @@ export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: Vec
       const offsetPts = offsetOutward(smoothed, smoothData, smoothWidth, smoothHeight, outwardOffsetPx);
 
       if (offsetPts.length >= 3) {
-        let d = `M${offsetPts[0].x.toFixed(1)},${offsetPts[0].y.toFixed(1)}`;
+        let d = `M${(offsetPts[0].x + offsetX).toFixed(1)},${(offsetPts[0].y + offsetY).toFixed(1)}`;
         for (let k = 1; k < offsetPts.length; k++) {
-          d += `L${offsetPts[k].x.toFixed(1)},${offsetPts[k].y.toFixed(1)}`;
+          d += `L${(offsetPts[k].x + offsetX).toFixed(1)},${(offsetPts[k].y + offsetY).toFixed(1)}`;
         }
         d += "Z";
         subpaths.push(d);
