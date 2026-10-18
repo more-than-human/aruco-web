@@ -19,10 +19,16 @@ export interface ScreenSegment {
   width: number;
   /** Bounding box height on screen in pixels */
   height: number;
+  /** Pre-rendered raster sprite for default ink rendering */
+  rasterCanvas?: CanvasImageSource;
+  /** Pre-rendered raster sprite for active / highlighted rendering */
+  activeCanvas?: CanvasImageSource;
+  /** Binary alpha mask of the cropped bounding box for exact hit testing */
+  alphaMask?: Uint8Array;
   /** Original SVG path string */
-  svgPath: string;
+  svgPath?: string;
   /** Canvas Path2D in paper canvas coordinates */
-  path2d: Path2D;
+  path2d?: Path2D;
   /** Convex hull points in paper canvas coordinates */
   hull?: Point2D[];
   /** Cached Path2D of convex hull in paper canvas coordinates */

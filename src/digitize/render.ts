@@ -132,34 +132,59 @@ export function renderPaperStatus(
     ctx.strokeRect(box.x, box.y, box.width, box.height);
   }
 
-  // Render segmented vectorized ink paths
+  // Render segmented ink
   for (const seg of segments) {
-    if (seg.isActive) {
-      // Active segment: stroke color blue to indicate active segment
-      ctx.fillStyle = COLOR_ACTIVE_FILL;
-      ctx.fill(seg.path2d, "evenodd");
-      ctx.strokeStyle = COLOR_ACTIVE_STROKE;
-      ctx.lineWidth = 3.5;
-      ctx.stroke(seg.path2d);
+    const [bx, by, bw, bh] = seg.bboxPx;
 
-      // Render segment identifier label
-      const [bx, by] = seg.bboxPx;
-      ctx.save();
-      ctx.fillStyle = COLOR_ACTIVE_STROKE;
-      ctx.font = "600 12px system-ui, -apple-system, sans-serif";
-      ctx.fillText(seg.id, bx, Math.max(16, by - 6));
-      ctx.restore();
-    } else if (seg.isFrozen) {
-      // Frozen segment (finger near, protected from occlusion): dark ink with subtle frozen stroke
-      ctx.fillStyle = COLOR_INK;
-      ctx.fill(seg.path2d, "evenodd");
-      ctx.strokeStyle = "rgba(37, 99, 235, 0.4)";
-      ctx.lineWidth = 2;
-      ctx.stroke(seg.path2d);
-    } else {
-      // Inactive segment: default dark ink fill
-      ctx.fillStyle = COLOR_INK;
-      ctx.fill(seg.path2d, "evenodd");
+    if (seg.rasterCanvas) {
+      if (seg.isActive) {
+        const activeImg = seg.activeCanvas ?? seg.rasterCanvas;
+        ctx.drawImage(activeImg, bx, by);
+        ctx.strokeStyle = COLOR_ACTIVE_STROKE;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(bx - 2, by - 2, bw + 4, bh + 4);
+
+        // Render segment identifier label
+        ctx.save();
+        ctx.fillStyle = COLOR_ACTIVE_STROKE;
+        ctx.font = "600 12px system-ui, -apple-system, sans-serif";
+        ctx.fillText(seg.id, bx, Math.max(16, by - 6));
+        ctx.restore();
+      } else if (seg.isFrozen) {
+        ctx.drawImage(seg.rasterCanvas, bx, by);
+        ctx.strokeStyle = "rgba(37, 99, 235, 0.4)";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bx - 2, by - 2, bw + 4, bh + 4);
+      } else {
+        ctx.drawImage(seg.rasterCanvas, bx, by);
+      }
+    } else if (seg.path2d) {
+      if (seg.isActive) {
+        // Active segment: stroke color blue to indicate active segment
+        ctx.fillStyle = COLOR_ACTIVE_FILL;
+        ctx.fill(seg.path2d, "evenodd");
+        ctx.strokeStyle = COLOR_ACTIVE_STROKE;
+        ctx.lineWidth = 3.5;
+        ctx.stroke(seg.path2d);
+
+        // Render segment identifier label
+        ctx.save();
+        ctx.fillStyle = COLOR_ACTIVE_STROKE;
+        ctx.font = "600 12px system-ui, -apple-system, sans-serif";
+        ctx.fillText(seg.id, bx, Math.max(16, by - 6));
+        ctx.restore();
+      } else if (seg.isFrozen) {
+        // Frozen segment (finger near, protected from occlusion): dark ink with subtle frozen stroke
+        ctx.fillStyle = COLOR_INK;
+        ctx.fill(seg.path2d, "evenodd");
+        ctx.strokeStyle = "rgba(37, 99, 235, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.stroke(seg.path2d);
+      } else {
+        // Inactive segment: default dark ink fill
+        ctx.fillStyle = COLOR_INK;
+        ctx.fill(seg.path2d, "evenodd");
+      }
     }
   }
 

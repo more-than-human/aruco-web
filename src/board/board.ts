@@ -80,6 +80,14 @@ export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, _ctx?
   const canvasX = dx / (seg.scale || 1) + seg.centerX;
   const canvasY = dy / (seg.scale || 1) + seg.centerY;
 
+  if (seg.alphaMask) {
+    const lx = Math.round(canvasX - seg.bboxPx[0]);
+    const ly = Math.round(canvasY - seg.bboxPx[1]);
+    if (lx >= 0 && lx < seg.bboxPx[2] && ly >= 0 && ly < seg.bboxPx[3]) {
+      if (seg.alphaMask[ly * seg.bboxPx[2] + lx] > 0) return true;
+    }
+  }
+
   if (seg.hull && seg.hull.length >= 3) {
     return isPointInHull(seg.hull, { x: canvasX, y: canvasY }, pad / (seg.scale || 1));
   }
@@ -310,8 +318,11 @@ export class ScreenBoardManager {
               bboxPx: clickedPaperSeg.bboxPx,
               width: bw * scale,
               height: bh * scale,
-              svgPath: clickedPaperSeg.svgPath,
-              path2d: clickedPaperSeg.path2d,
+              rasterCanvas: clickedPaperSeg.rasterCanvas,
+              activeCanvas: clickedPaperSeg.activeCanvas,
+              alphaMask: clickedPaperSeg.alphaMask,
+              svgPath: clickedPaperSeg.svgPath ?? "",
+              path2d: clickedPaperSeg.path2d ?? new Path2D(),
               hull: clickedPaperSeg.hull,
               hullPath2d: clickedPaperSeg.hullPath2d,
               inkAreaMm2: clickedPaperSeg.inkAreaMm2,
@@ -340,16 +351,26 @@ export class ScreenBoardManager {
 
   private findPaperSegmentAt(pt: Point2D): DrawingSegment | null {
     for (const seg of this.latestPaperSegments) {
+      const [bx, by, bw, bh] = seg.bboxPx;
+      const pad = 12;
+      if (pt.x < bx - pad || pt.x > bx + bw + pad || pt.y < by - pad || pt.y > by + bh + pad) {
+        continue;
+      }
+
+      if (seg.alphaMask) {
+        const lx = Math.round(pt.x - bx);
+        const ly = Math.round(pt.y - by);
+        if (lx >= 0 && lx < bw && ly >= 0 && ly < bh) {
+          if (seg.alphaMask[ly * bw + lx] > 0) return seg;
+        }
+      }
+
       if (seg.hull && seg.hull.length >= 3) {
         if (isPointInHull(seg.hull, pt, 12)) {
           return seg;
         }
       } else {
-        const [bx, by, bw, bh] = seg.bboxPx;
-        const pad = 12;
-        if (pt.x >= bx - pad && pt.x <= bx + bw + pad && pt.y >= by - pad && pt.y <= by + bh + pad) {
-          return seg;
-        }
+        return seg;
       }
     }
     return null;
@@ -385,23 +406,41 @@ export class ScreenBoardManager {
     this.ctx.scale(seg.scale, seg.scale);
     this.ctx.translate(-seg.centerX, -seg.centerY);
 
-    if (isHighlighted) {
-      this.ctx.fillStyle = COLOR_ACTIVE_FILL;
-      this.ctx.fill(seg.path2d, "evenodd");
-      this.ctx.strokeStyle = COLOR_ACTIVE_STROKE;
-      this.ctx.lineWidth = 3.5 / (seg.scale || 1);
-      this.ctx.stroke(seg.path2d);
+    if (seg.rasterCanvas) {
+      const img = isHighlighted && seg.activeCanvas ? seg.activeCanvas : seg.rasterCanvas;
+      this.ctx.drawImage(img, seg.bboxPx[0], seg.bboxPx[1]);
 
-      // Render segment identifier label
-      const [bx, by] = seg.bboxPx;
-      this.ctx.save();
-      this.ctx.fillStyle = COLOR_ACTIVE_STROKE;
-      this.ctx.font = `600 ${Math.round(12 / (seg.scale || 1))}px system-ui, -apple-system, sans-serif`;
-      this.ctx.fillText(seg.sourceId || seg.id, bx, Math.max(16, by - 6));
-      this.ctx.restore();
-    } else {
-      this.ctx.fillStyle = COLOR_INK;
-      this.ctx.fill(seg.path2d, "evenodd");
+      if (isHighlighted) {
+        this.ctx.strokeStyle = COLOR_ACTIVE_STROKE;
+        this.ctx.lineWidth = 2.5 / (seg.scale || 1);
+        this.ctx.strokeRect(seg.bboxPx[0] - 2, seg.bboxPx[1] - 2, seg.bboxPx[2] + 4, seg.bboxPx[3] + 4);
+
+        const [bx, by] = seg.bboxPx;
+        this.ctx.save();
+        this.ctx.fillStyle = COLOR_ACTIVE_STROKE;
+        this.ctx.font = `600 ${Math.round(12 / (seg.scale || 1))}px system-ui, -apple-system, sans-serif`;
+        this.ctx.fillText(seg.sourceId || seg.id, bx, Math.max(16, by - 6));
+        this.ctx.restore();
+      }
+    } else if (seg.path2d) {
+      if (isHighlighted) {
+        this.ctx.fillStyle = COLOR_ACTIVE_FILL;
+        this.ctx.fill(seg.path2d, "evenodd");
+        this.ctx.strokeStyle = COLOR_ACTIVE_STROKE;
+        this.ctx.lineWidth = 3.5 / (seg.scale || 1);
+        this.ctx.stroke(seg.path2d);
+
+        // Render segment identifier label
+        const [bx, by] = seg.bboxPx;
+        this.ctx.save();
+        this.ctx.fillStyle = COLOR_ACTIVE_STROKE;
+        this.ctx.font = `600 ${Math.round(12 / (seg.scale || 1))}px system-ui, -apple-system, sans-serif`;
+        this.ctx.fillText(seg.sourceId || seg.id, bx, Math.max(16, by - 6));
+        this.ctx.restore();
+      } else {
+        this.ctx.fillStyle = COLOR_INK;
+        this.ctx.fill(seg.path2d, "evenodd");
+      }
     }
 
     this.ctx.restore();

@@ -1,10 +1,8 @@
 import { CvScope } from "./cv-scope.ts";
-import { extractInkMask, type InkExtractorOptions } from "./ink-extractor.ts";
+import { processInk, type InkProcessorOptions } from "./ink-processor.ts";
 import { isOpenCVReady } from "./opencv.ts";
 import { isPointInHull, pointToBoxDistance, SegmentTracker } from "./segment-tracker.ts";
-import { segmentDrawings, type SegmenterOptions } from "./segmenter.ts";
 import type { DrawingSegment, PaperTrackingResult, Point2D, Rect } from "./types.ts";
-import type { VectorizerOptions } from "./vectorizer.ts";
 
 /** Proximity distance in canvas pixels (~25mm) within which a segment is frozen */
 const PROXIMITY_DISTANCE_PX = 100;
@@ -13,10 +11,8 @@ const PROXIMITY_DISTANCE_PX = 100;
 const FREEZE_HOLD_MS = 500;
 
 export interface InkDigitizerConfig {
-  extractor?: InkExtractorOptions;
-  segmenter?: SegmenterOptions;
-  vectorizer?: VectorizerOptions;
-  /** Max update rate in Hz (default: 8 Hz) */
+  processor?: InkProcessorOptions;
+  /** Max update rate in Hz (default: 15 Hz) */
   targetFps?: number;
   /** Proximity distance in canvas pixels for freezing segments (default: 100) */
   proximityDistancePx?: number;
@@ -38,7 +34,7 @@ export class InkDigitizer {
 
   constructor(config?: InkDigitizerConfig) {
     this.config = config ?? {};
-    const targetFps = this.config.targetFps ?? 8;
+    const targetFps = this.config.targetFps ?? 15;
     this.minIntervalMs = 1000 / targetFps;
     this.proximityDistancePx = this.config.proximityDistancePx ?? PROXIMITY_DISTANCE_PX;
     this.freezeHoldMs = this.config.freezeHoldMs ?? FREEZE_HOLD_MS;
@@ -138,6 +134,14 @@ export class InkDigitizer {
       return false;
     }
 
+    if (seg.alphaMask) {
+      const lx = Math.round(pt.x - bx);
+      const ly = Math.round(pt.y - by);
+      if (lx >= 0 && lx < bw && ly >= 0 && ly < bh) {
+        if (seg.alphaMask[ly * bw + lx] > 0) return true;
+      }
+    }
+
     if (seg.hull && seg.hull.length >= 3) {
       return isPointInHull(seg.hull, pt, pad);
     }
@@ -148,7 +152,7 @@ export class InkDigitizer {
   }
 
   /**
-   * Evaluates camera frame for ink extraction, stroke clustering, and vectorization.
+   * Evaluates camera frame for ink extraction and raster drawing segmentation.
    * Freezes segments in proximity to the finger, ignoring new detection in their regions
    * and using the last detected segment as the ground truth.
    */
@@ -174,15 +178,7 @@ export class InkDigitizer {
       const t0 = performance.now();
       try {
         CvScope.use((scope) => {
-          const inkMat = extractInkMask(scope, cameraImageData, tracking, this.config.extractor, frozenRegions);
-          if (!inkMat) return;
-
-          const pxPerMm = tracking.pxPerMm[0];
-          const rawSegments = segmentDrawings(scope, inkMat, pxPerMm, {
-            ...this.config.segmenter,
-            vectorizerOptions: this.config.vectorizer,
-          });
-
+          const rawSegments = processInk(scope, cameraImageData, tracking, this.config.processor, frozenRegions);
           const trackedSegments = this.tracker.update(rawSegments, frozenSegments);
 
           // Preserve active and frozen states
@@ -199,7 +195,7 @@ export class InkDigitizer {
           this.lastDurationMs = performance.now() - t0;
         });
       } catch (err) {
-        console.error("Error during ink segmentation & vectorization:", err);
+        console.error("Error during ink digitization:", err);
       } finally {
         this.isProcessing = false;
       }

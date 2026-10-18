@@ -6,6 +6,7 @@ import { initCamera, setupCameraSelector, setupControlButtons } from "./camera.t
 import { Cursor } from "./cursor/index.ts";
 import {
   initOpenCV,
+  initSegmentWasm,
   InkDigitizer,
   LETTER_LANDSCAPE_HEIGHT,
   LETTER_LANDSCAPE_WIDTH,
@@ -65,7 +66,7 @@ window.addEventListener("load", async () => {
   paperCanvas.width = DIGITIZED_PAPER_WIDTH;
   paperCanvas.height = DIGITIZED_PAPER_HEIGHT;
 
-  await Promise.all([initArUcoWasm(arucoWatBytes), initOpenCV()]);
+  await Promise.all([initArUcoWasm(arucoWatBytes), initOpenCV(), initSegmentWasm()]);
 
   const wasmDetector = new WasmDetector({
     dictionaryName: DICTIONARY_NAME,

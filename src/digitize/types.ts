@@ -94,10 +94,16 @@ export interface DrawingSegment {
   bboxMm: [number, number, number, number];
   /** Total ink area in square millimeters */
   inkAreaMm2: number;
+  /** Pre-rendered raster sprite for default ink rendering */
+  rasterCanvas?: CanvasImageSource;
+  /** Pre-rendered raster sprite for active / highlighted rendering */
+  activeCanvas?: CanvasImageSource;
+  /** Binary alpha mask of the cropped bounding box for exact hit testing */
+  alphaMask?: Uint8Array;
   /** SVG path d string in canvas coordinates */
-  svgPath: string;
+  svgPath?: string;
   /** Cached Path2D in canvas coordinates */
-  path2d: Path2D;
+  path2d?: Path2D;
   /** Convex hull vertices in canvas coordinates */
   hull: Point2D[];
   /** Cached Path2D of convex hull in canvas coordinates */
