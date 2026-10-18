@@ -122,6 +122,7 @@ export function segmentDrawings(scope: CvScope, inkMat: Mat, pxPerMm: number, op
       svgPath: shape.svgPath,
       path2d: new Path2D(shape.svgPath),
       isActive: false,
+      isFrozen: false,
     });
   }
 

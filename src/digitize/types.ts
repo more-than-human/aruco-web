@@ -100,4 +100,8 @@ export interface DrawingSegment {
   path2d: Path2D;
   /** Whether the finger pointer currently intersects this segment */
   isActive: boolean;
+  /** Whether the segment is frozen in relation to markers due to finger proximity */
+  isFrozen: boolean;
+  /** Timestamp in ms when segment was last near the finger */
+  lastNearMs?: number;
 }

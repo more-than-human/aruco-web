@@ -190,10 +190,6 @@ function startDetectionLoop(
     const markers = tracker.detect(imageData, now);
     const tracking = paperTracker.update(markers, now);
 
-    if (tracking.isTracking) {
-      inkDigitizer.processFrame(imageData, tracking, now);
-    }
-
     const { screenPos, fingerTipNorm } = getPointerState();
 
     const screenCanvasPos = screenPos ? viewportToCanvasPoint(screenPos, paperCanvas) : null;
@@ -206,7 +202,11 @@ function startDetectionLoop(
         : null;
 
     const pointerCanvasPos = screenCanvasPos ?? physicalCanvasPos;
-    const activeSegment = inkDigitizer.updatePointer(pointerCanvasPos, paperCtx);
+    const activeSegment = inkDigitizer.updatePointer(pointerCanvasPos, paperCtx, now);
+
+    if (tracking.isTracking) {
+      inkDigitizer.processFrame(imageData, tracking, now);
+    }
 
     renderPaperStatus(
       paperCtx,

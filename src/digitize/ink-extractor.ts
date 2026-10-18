@@ -1,6 +1,6 @@
 import type { Mat } from "@techstark/opencv-js";
 import { CvScope } from "./cv-scope.ts";
-import type { PaperTrackingResult } from "./types.ts";
+import type { PaperTrackingResult, Rect } from "./types.ts";
 
 export interface InkExtractorOptions {
   /** Size of Gaussian blur kernel (default: 5) */
@@ -21,7 +21,13 @@ export interface InkExtractorOptions {
  * Extracts a clean binary ink Mat (255=ink, 0=paper) from the camera image
  * using perspective rectification, adaptive Gaussian thresholding, and speck suppression.
  */
-export function extractInkMask(scope: CvScope, cameraImageData: ImageData, tracking: PaperTrackingResult, options?: InkExtractorOptions): Mat | null {
+export function extractInkMask(
+  scope: CvScope,
+  cameraImageData: ImageData,
+  tracking: PaperTrackingResult,
+  options?: InkExtractorOptions,
+  frozenRegions?: Rect[],
+): Mat | null {
   if (!tracking.isTracking || !tracking.cameraToCanvasH) {
     return null;
   }
@@ -91,7 +97,23 @@ export function extractInkMask(scope: CvScope, cameraImageData: ImageData, track
     }
   }
 
-  // 7. Speck removal via connected components
+  // 7. Zero out regions occupied by frozen segments (ignoring new detections near finger)
+  if (frozenRegions && frozenRegions.length > 0) {
+    const frozenPadPx = Math.round(15.0 * pxPerMm);
+    for (const region of frozenRegions) {
+      const x0 = Math.max(0, Math.floor(region.x - frozenPadPx));
+      const y0 = Math.max(0, Math.floor(region.y - frozenPadPx));
+      const x1 = Math.min(canvasWidth, Math.ceil(region.x + region.width + frozenPadPx));
+      const y1 = Math.min(canvasHeight, Math.ceil(region.y + region.height + frozenPadPx));
+
+      if (x1 > x0 && y1 > y0) {
+        const frozenRect = new cv.Rect(x0, y0, x1 - x0, y1 - y0);
+        inkMask.roi(frozenRect).setTo(zeroScalar);
+      }
+    }
+  }
+
+  // 8. Speck removal via connected components
   const labels = scope.mat();
   const stats = scope.mat();
   const centroids = scope.mat();

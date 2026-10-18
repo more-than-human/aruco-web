@@ -1,10 +1,16 @@
 import { CvScope } from "./cv-scope.ts";
 import { extractInkMask, type InkExtractorOptions } from "./ink-extractor.ts";
 import { isOpenCVReady } from "./opencv.ts";
-import { SegmentTracker } from "./segment-tracker.ts";
+import { pointToBoxDistance, SegmentTracker } from "./segment-tracker.ts";
 import { segmentDrawings, type SegmenterOptions } from "./segmenter.ts";
-import type { DrawingSegment, PaperTrackingResult, Point2D } from "./types.ts";
+import type { DrawingSegment, PaperTrackingResult, Point2D, Rect } from "./types.ts";
 import type { VectorizerOptions } from "./vectorizer.ts";
+
+/** Proximity distance in canvas pixels (~25mm) within which a segment is frozen */
+const PROXIMITY_DISTANCE_PX = 100;
+
+/** Duration in ms to hold frozen state after finger leaves proximity to prevent occlusion dropouts */
+const FREEZE_HOLD_MS = 500;
 
 export interface InkDigitizerConfig {
   extractor?: InkExtractorOptions;
@@ -12,6 +18,10 @@ export interface InkDigitizerConfig {
   vectorizer?: VectorizerOptions;
   /** Max update rate in Hz (default: 8 Hz) */
   targetFps?: number;
+  /** Proximity distance in canvas pixels for freezing segments (default: 100) */
+  proximityDistancePx?: number;
+  /** Grace hold time in ms for frozen segments (default: 500) */
+  freezeHoldMs?: number;
 }
 
 export class InkDigitizer {
@@ -23,11 +33,15 @@ export class InkDigitizer {
   private latestSegments: DrawingSegment[] = [];
   private lastDurationMs = 0;
   private activeSegmentId: string | null = null;
+  private proximityDistancePx: number;
+  private freezeHoldMs: number;
 
   constructor(config?: InkDigitizerConfig) {
     this.config = config ?? {};
     const targetFps = this.config.targetFps ?? 8;
     this.minIntervalMs = 1000 / targetFps;
+    this.proximityDistancePx = this.config.proximityDistancePx ?? PROXIMITY_DISTANCE_PX;
+    this.freezeHoldMs = this.config.freezeHoldMs ?? FREEZE_HOLD_MS;
   }
 
   public reset(): void {
@@ -54,26 +68,37 @@ export class InkDigitizer {
 
   /**
    * Tests whether the finger pointer coordinates intersect any segment
-   * and marks the intersected segment as active.
+   * and manages the frozen state when finger is near a segment.
    */
-  public updatePointer(pointerCanvasPos: Point2D | null, ctx?: CanvasRenderingContext2D): DrawingSegment | null {
+  public updatePointer(pointerCanvasPos: Point2D | null, ctx?: CanvasRenderingContext2D, now: number = performance.now()): DrawingSegment | null {
     this.activeSegmentId = null;
-
-    if (!pointerCanvasPos) {
-      for (const seg of this.latestSegments) {
-        seg.isActive = false;
-      }
-      return null;
-    }
 
     let active: DrawingSegment | null = null;
 
     for (const seg of this.latestSegments) {
-      const isIntersecting = this.isPointInSegment(seg, pointerCanvasPos, ctx);
-      seg.isActive = isIntersecting;
-      if (isIntersecting && !active) {
-        active = seg;
-        this.activeSegmentId = seg.id;
+      if (pointerCanvasPos) {
+        const dist = pointToBoxDistance(pointerCanvasPos, seg.bboxPx);
+        const isNear = dist <= this.proximityDistancePx;
+        const isIntersecting = this.isPointInSegment(seg, pointerCanvasPos, ctx);
+
+        if (isNear || isIntersecting) {
+          seg.isFrozen = true;
+          seg.lastNearMs = now;
+        } else if (now - (seg.lastNearMs ?? 0) > this.freezeHoldMs) {
+          seg.isFrozen = false;
+        }
+
+        seg.isActive = isIntersecting;
+        if (isIntersecting && !active) {
+          active = seg;
+          this.activeSegmentId = seg.id;
+        }
+      } else {
+        // Pointer not detected in this frame
+        seg.isActive = false;
+        if (now - (seg.lastNearMs ?? 0) > this.freezeHoldMs) {
+          seg.isFrozen = false;
+        }
       }
     }
 
@@ -103,7 +128,8 @@ export class InkDigitizer {
 
   /**
    * Evaluates camera frame for ink extraction, stroke clustering, and vectorization.
-   * Runs asynchronously without blocking the main 30/60 fps camera loop.
+   * Freezes segments in proximity to the finger, ignoring new detection in their regions
+   * and using the last detected segment as the ground truth.
    */
   public processFrame(cameraImageData: ImageData, tracking: PaperTrackingResult, now: number = performance.now()): void {
     if (!isOpenCVReady()) return;
@@ -114,11 +140,20 @@ export class InkDigitizer {
     this.isProcessing = true;
     this.lastProcessTime = now;
 
+    // Snapshot currently frozen segments before async processing
+    const frozenSegments = this.latestSegments.filter((s) => s.isFrozen);
+    const frozenRegions: Rect[] = frozenSegments.map((s) => ({
+      x: s.bboxPx[0],
+      y: s.bboxPx[1],
+      width: s.bboxPx[2],
+      height: s.bboxPx[3],
+    }));
+
     queueMicrotask(() => {
       const t0 = performance.now();
       try {
         CvScope.use((scope) => {
-          const inkMat = extractInkMask(scope, cameraImageData, tracking, this.config.extractor);
+          const inkMat = extractInkMask(scope, cameraImageData, tracking, this.config.extractor, frozenRegions);
           if (!inkMat) return;
 
           const pxPerMm = tracking.pxPerMm[0];
@@ -127,14 +162,15 @@ export class InkDigitizer {
             vectorizerOptions: this.config.vectorizer,
           });
 
-          const trackedSegments = this.tracker.update(rawSegments);
+          const trackedSegments = this.tracker.update(rawSegments, frozenSegments);
 
-          // Preserve active state if active segment continues to exist
-          if (this.activeSegmentId) {
-            for (const s of trackedSegments) {
-              if (s.id === this.activeSegmentId) {
-                s.isActive = true;
-              }
+          // Preserve active and frozen states
+          for (const s of trackedSegments) {
+            if (s.id === this.activeSegmentId) {
+              s.isActive = true;
+            }
+            if (frozenSegments.some((f) => f.id === s.id)) {
+              s.isFrozen = true;
             }
           }
 
