@@ -1,4 +1,4 @@
-import { DICTIONARY_PACKED } from "../shared/dictionary-packed";
+import { DICTIONARY_PACKED } from "../lib/dictionary-packed";
 
 export interface IPoint {
   x: number;

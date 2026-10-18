@@ -1,6 +1,18 @@
-import { Detector, Marker, type IConfig, type IImage, type IPoint } from "./aruco";
+import { type IConfig, type IImage, type IPoint } from "./aruco";
 
 export type ImageBuffer = IImage | ImageData | { width: number; height: number; data: Uint8ClampedArray | Uint8Array };
+
+export class Marker {
+  public id: number;
+  public corners: IPoint[];
+  public hammingDistance: number;
+
+  constructor(id: number, corners: any, hammingDistance: number) {
+    this.id = id;
+    this.corners = corners;
+    this.hammingDistance = hammingDistance;
+  }
+}
 
 export interface IMarkerLike {
   id: number;
@@ -9,7 +21,7 @@ export interface IMarkerLike {
 }
 
 export interface IMarkerDetector {
-  detect(image: ImageBuffer): (Marker | IMarkerLike)[];
+  detect(image: ImageBuffer): IMarkerLike[];
 }
 
 export interface ITrackerConfig extends IConfig {
@@ -40,7 +52,7 @@ export interface ITrackerConfig extends IConfig {
   /** Higher values require stronger quiet-zone-to-border contrast to keep coasting markers alive. (Default: 18) */
   minBorderContrast?: number;
 
-  detector?: IMarkerDetector;
+  detector: IMarkerDetector;
 }
 
 export interface ISoAMarkerBatch {
@@ -124,7 +136,7 @@ export class Tracker {
 
   constructor(config: ITrackerConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.detector = config.detector ?? new Detector(config);
+    this.detector = config.detector;
   }
 
   public setDetector(detector: IMarkerDetector): void {

@@ -7,24 +7,16 @@
   </head>
 
   <body>
-    <div id="camera-controls">
-      <label for="camera-select">Camera:</label>
-      <select id="camera-select"></select>
-      <label for="engine-select" style="margin-left: 12px">Engine:</label>
-      <select id="engine-select">
-        <option value="wasm" selected>WebAssembly (SIMD)</option>
-        <option value="ts">TypeScript</option>
-      </select>
-      <label for="tracking-toggle" style="margin-left: 12px; cursor: pointer; user-select: none">
-        <input type="checkbox" id="tracking-toggle" checked style="vertical-align: middle; margin-right: 4px" />
-        Kalman Tracker
-      </label>
-      <span id="tracker-stats" style="margin-left: 12px; font-weight: bold; font-size: 13px"></span>
-    </div>
-
     <div id="app">
       <video loop autoplay muted playsinline id="video"></video>
-      <canvas id="canvas"></canvas>
+      <canvas id="paper-canvas"></canvas>
+      <div id="camera-ui">
+        <canvas id="camera-canvas"></canvas>
+        <div id="camera-controls">
+          <label for="camera-select">Camera:</label>
+          <select id="camera-select"></select>
+        </div>
+      </div>
     </div>
     <script src="/src/main.ts" type="module"></script>
   </body>
