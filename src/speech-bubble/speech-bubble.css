@@ -1,0 +1,202 @@
+.speech-bubble {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 3000;
+
+  box-sizing: border-box;
+  max-width: min(85vw, 840px);
+  min-width: 200px;
+  padding: 8px 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  color: #ffffff;
+  background: rgba(18, 18, 22, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  transition:
+    border-radius 180ms ease,
+    padding 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+/* When showing longer transcript, allow wrapping and rounded rectangle card */
+.speech-bubble:not(.speech-bubble--empty) {
+  border-radius: 16px;
+  padding: 10px 16px;
+}
+
+/* Toggle Start/Stop Button */
+.speech-bubble__toggle {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  cursor: pointer;
+  outline: none;
+
+  transition:
+    background-color 160ms ease,
+    transform 140ms ease,
+    box-shadow 160ms ease;
+}
+
+.speech-bubble__toggle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.06);
+}
+
+.speech-bubble__toggle:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.speech-bubble__toggle:focus-visible {
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.6);
+}
+
+/* Listening active state */
+.speech-bubble__toggle--listening {
+  background: #e53935;
+  color: #ffffff;
+  animation: speech-bubble-pulse 1.8s infinite;
+}
+
+.speech-bubble__toggle--listening:hover:not(:disabled) {
+  background: #d32f2f;
+}
+
+@keyframes speech-bubble-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(229, 57, 53, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0);
+  }
+}
+
+.speech-bubble__toggle:disabled,
+.speech-bubble__toggle--unsupported {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.speech-bubble__mic-icon {
+  display: block;
+  pointer-events: none;
+}
+
+/* Content Area */
+.speech-bubble__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.speech-bubble__status {
+  font-size: clamp(12px, 1.3vw, 14px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.65);
+  user-select: none;
+}
+
+.speech-bubble__status[hidden] {
+  display: none;
+}
+
+.speech-bubble__body {
+  font-size: clamp(15px, 2vw, 22px);
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.speech-bubble__body[hidden] {
+  display: none;
+}
+
+.speech-bubble__interim {
+  color: rgba(255, 255, 255, 0.58);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Clear Transcript Button */
+.speech-bubble__clear {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  outline: none;
+
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
+}
+
+.speech-bubble__clear:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.speech-bubble__clear:active {
+  transform: scale(0.92);
+}
+
+.speech-bubble__clear[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech-bubble,
+  .speech-bubble__toggle,
+  .speech-bubble__clear {
+    transition: none;
+    animation: none;
+  }
+}

@@ -5,6 +5,8 @@ import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
 import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
 import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
 import { Tracker } from "./lib/tracker.ts";
+import { SpeechBubble } from "./speech-bubble/index.ts";
+import { SpeechRecognizer } from "./speech/index.ts";
 
 // --- Configuration Constants ---
 const VIDEO_WIDTH = 640;
@@ -24,6 +26,14 @@ const TRACKER_CONFIG = {
   processNoise: 1.5,
   measurementNoise: 8.0,
   coastVelocityDamping: 0.85,
+} as const;
+
+// --- Speech Recognition ---
+const SPEECH_CONFIG = {
+  lang: "en-US",
+  continuous: true,
+  interimResults: true,
+  autoRestart: true,
 } as const;
 
 // --- Application Lifecycle ---
@@ -60,6 +70,14 @@ window.addEventListener("load", async () => {
       requiredStableFrames: 0, // Faster ink confirmation
       blendAlpha: 0.1,
     },
+  });
+
+  // Voice -> Text speech recognition engine
+  const speech = new SpeechRecognizer(SPEECH_CONFIG);
+
+  // Speech bubble system responsible for displaying text and letting user toggle start/stop
+  new SpeechBubble({
+    speech,
   });
 
   await initCamera(video);
