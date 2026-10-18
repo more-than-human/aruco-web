@@ -67,45 +67,75 @@ export class InkDigitizer {
   }
 
   /**
-   * Tests whether the finger pointer coordinates intersect any segment
-   * and manages the frozen state when finger is near a segment.
+   * Tests whether the finger pointer coordinates or mouse pointer coordinates
+   * intersect any segment, and manages the frozen state when pointer is near a segment.
    */
-  public updatePointer(pointerCanvasPos: Point2D | null, ctx?: CanvasRenderingContext2D, now: number = performance.now()): DrawingSegment | null {
+  public updatePointer(
+    fingerCanvasPos: Point2D | null,
+    mouseCanvasPos: Point2D | null = null,
+    ctx?: CanvasRenderingContext2D,
+    now: number = performance.now(),
+  ): DrawingSegment | null {
     this.activeSegmentId = null;
 
     let active: DrawingSegment | null = null;
 
     for (const seg of this.latestSegments) {
-      if (pointerCanvasPos) {
-        const dist = pointToBoxDistance(pointerCanvasPos, seg.bboxPx);
-        const isNear = dist <= this.proximityDistancePx;
-        const isIntersecting = this.isPointInSegment(seg, pointerCanvasPos, ctx);
+      let fingerIntersecting = false;
 
-        if (isNear || isIntersecting) {
+      // 1. Finger proximity & intersection
+      if (fingerCanvasPos) {
+        const dist = pointToBoxDistance(fingerCanvasPos, seg.bboxPx);
+        const isNear = dist <= this.proximityDistancePx;
+        fingerIntersecting = this.isPointInSegment(seg, fingerCanvasPos, ctx);
+
+        if (isNear || fingerIntersecting) {
           seg.isFrozen = true;
           seg.lastNearMs = now;
         } else if (now - (seg.lastNearMs ?? 0) > this.freezeHoldMs) {
           seg.isFrozen = false;
         }
-
-        seg.isActive = isIntersecting;
-        if (isIntersecting && !active) {
-          active = seg;
-          this.activeSegmentId = seg.id;
-        }
       } else {
-        // Pointer not detected in this frame
-        seg.isActive = false;
         if (now - (seg.lastNearMs ?? 0) > this.freezeHoldMs) {
           seg.isFrozen = false;
         }
+      }
+
+      // 2. Mouse hover & intersection
+      const mouseIntersecting =
+        mouseCanvasPos !== null && this.isPointInSegment(seg, mouseCanvasPos, ctx);
+
+      // Freeze when mouse hovers so camera exposure or hand shadow doesn't distort segment
+      if (mouseIntersecting) {
+        seg.isFrozen = true;
+        seg.lastNearMs = now;
+      }
+
+      const isIntersecting = fingerIntersecting || mouseIntersecting;
+      seg.isActive = isIntersecting;
+
+      if (isIntersecting && !active) {
+        active = seg;
+        this.activeSegmentId = seg.id;
       }
     }
 
     return active;
   }
 
-  private isPointInSegment(seg: DrawingSegment, pt: Point2D, ctx?: CanvasRenderingContext2D): boolean {
+  public findSegmentAtPoint(
+    pt: Point2D,
+    ctx?: CanvasRenderingContext2D,
+  ): DrawingSegment | null {
+    for (const seg of this.latestSegments) {
+      if (this.isPointInSegment(seg, pt, ctx)) {
+        return seg;
+      }
+    }
+    return null;
+  }
+
+  public isPointInSegment(seg: DrawingSegment, pt: Point2D, ctx?: CanvasRenderingContext2D): boolean {
     const [bx, by, bw, bh] = seg.bboxPx;
     const pad = 12;
     if (pt.x < bx - pad || pt.x > bx + bw + pad || pt.y < by - pad || pt.y > by + bh + pad) {

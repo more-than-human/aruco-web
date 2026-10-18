@@ -1,6 +1,7 @@
 import arucoWatBytes from "./aruco-tracking/aruco-simd.wat";
-import { initArUcoWasm, Detector as WasmDetector } from "./aruco-tracking/aruco-wasm.ts";
+import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-wasm.ts";
 import { Tracker } from "./aruco-tracking/tracker.ts";
+import { ScreenBoardManager, viewportToCanvasPoint } from "./board/index.ts";
 import { initCamera, setupCameraSelector } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
 import {
@@ -55,6 +56,7 @@ window.addEventListener("load", async () => {
   const video = document.querySelector<HTMLVideoElement>("#video")!;
   const cameraCanvas = document.querySelector<HTMLCanvasElement>("#camera-canvas")!;
   const paperCanvas = document.querySelector<HTMLCanvasElement>("#paper-canvas")!;
+  const screenCanvas = document.querySelector<HTMLCanvasElement>("#screen-canvas")!;
 
   video.width = VIDEO_WIDTH;
   video.height = VIDEO_HEIGHT;
@@ -82,6 +84,7 @@ window.addEventListener("load", async () => {
   });
 
   const inkDigitizer = new InkDigitizer();
+  const boardManager = new ScreenBoardManager(screenCanvas);
 
   // Layer 1: Hand cursor on top DOM layer (simple red circle, minimum styling)
   const cursor = new Cursor({
@@ -140,6 +143,7 @@ window.addEventListener("load", async () => {
       tracker.reset();
       paperTracker.reset();
       inkDigitizer.reset();
+      boardManager.reset();
       cursor.hide();
       latestPointerScreenPos = null;
       latestFingerTipNorm = null;
@@ -150,10 +154,19 @@ window.addEventListener("load", async () => {
     },
   );
 
-  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker, inkDigitizer, () => ({
-    screenPos: latestPointerScreenPos,
-    fingerTipNorm: latestFingerTipNorm,
-  }));
+  startDetectionLoop(
+    video,
+    cameraCanvas,
+    paperCanvas,
+    tracker,
+    paperTracker,
+    inkDigitizer,
+    boardManager,
+    () => ({
+      screenPos: latestPointerScreenPos,
+      fingerTipNorm: latestFingerTipNorm,
+    }),
+  );
 
   // Initialize and start hand tracking asynchronously
   handTracker
@@ -174,6 +187,7 @@ function startDetectionLoop(
   tracker: Tracker,
   paperTracker: PaperTracker,
   inkDigitizer: InkDigitizer,
+  boardManager: ScreenBoardManager,
   getPointerState: () => { screenPos: Point2D | null; fingerTipNorm: Point2D | null },
 ): void {
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
@@ -201,8 +215,15 @@ function startDetectionLoop(
           })
         : null;
 
-    const pointerCanvasPos = screenCanvasPos ?? physicalCanvasPos;
-    const activeSegment = inkDigitizer.updatePointer(pointerCanvasPos, paperCtx, now);
+    const fingerCanvasPos = screenCanvasPos ?? physicalCanvasPos;
+    const mouseCanvasPos = boardManager.getMouseCanvasPoint(paperCanvas);
+
+    const activeSegment = inkDigitizer.updatePointer(
+      fingerCanvasPos,
+      mouseCanvasPos,
+      paperCtx,
+      now,
+    );
 
     if (tracking.isTracking) {
       inkDigitizer.processFrame(imageData, tracking, now);
@@ -214,10 +235,12 @@ function startDetectionLoop(
       DIGITIZED_PAPER_WIDTH,
       DIGITIZED_PAPER_HEIGHT,
       inkDigitizer.getSegments(),
-      pointerCanvasPos,
+      fingerCanvasPos,
       activeSegment,
       inkDigitizer.getLastDurationMs(),
     );
+
+    boardManager.update(inkDigitizer.getSegments(), paperCanvas);
 
     renderCorners(ctx, markers);
     if (tracking.isTracking) {
@@ -228,45 +251,4 @@ function startDetectionLoop(
   };
 
   requestAnimationFrame(update);
-}
-
-/**
- * Maps a screen viewport coordinate (CSS pixels) to paper canvas coordinate space
- * taking into account element bounding rect and CSS object-fit: contain letterboxing.
- */
-function viewportToCanvasPoint(screenPos: Point2D, canvas: HTMLCanvasElement): Point2D | null {
-  const rect = canvas.getBoundingClientRect();
-  const containerW = rect.width;
-  const containerH = rect.height;
-  if (containerW === 0 || containerH === 0) return null;
-
-  const canvasW = canvas.width;
-  const canvasH = canvas.height;
-  const canvasAspect = canvasW / canvasH;
-  const containerAspect = containerW / containerH;
-
-  let renderedW: number;
-  let renderedH: number;
-  let offsetX: number;
-  let offsetY: number;
-
-  if (containerAspect > canvasAspect) {
-    renderedH = containerH;
-    renderedW = containerH * canvasAspect;
-    offsetX = rect.left + (containerW - renderedW) * 0.5;
-    offsetY = rect.top;
-  } else {
-    renderedW = containerW;
-    renderedH = containerW / canvasAspect;
-    offsetX = rect.left;
-    offsetY = rect.top + (containerH - renderedH) * 0.5;
-  }
-
-  const cx = ((screenPos.x - offsetX) / renderedW) * canvasW;
-  const cy = ((screenPos.y - offsetY) / renderedH) * canvasH;
-
-  if (cx >= 0 && cx <= canvasW && cy >= 0 && cy <= canvasH) {
-    return { x: cx, y: cy };
-  }
-  return null;
 }
