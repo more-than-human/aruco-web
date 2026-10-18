@@ -1,5 +1,5 @@
-import type { IPoint, Marker } from "../lib/aruco.ts";
-import { TrackedMarker } from "../lib/tracker.ts";
+import type { IPoint, Marker } from "../aruco-tracking/aruco.ts";
+import { TrackedMarker } from "../aruco-tracking/tracker.ts";
 import {
   DIGITIZING_ZONE_EXTEND_MM,
   LETTER_LANDSCAPE_HEIGHT_MM,

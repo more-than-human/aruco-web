@@ -1,4 +1,4 @@
-import { TrackedMarker } from "../lib/tracker";
+import { TrackedMarker } from "../aruco-tracking/tracker";
 import type { PaperWarpModel } from "./types";
 
 const STROKE_COLOR = "#00e676";

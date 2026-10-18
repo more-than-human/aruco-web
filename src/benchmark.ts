@@ -1,7 +1,7 @@
 import benchImageSrc from "../benchmark/bench-01.jpg";
-import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
-import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm";
-import { Detector as TsDetector } from "./lib/aruco";
+import { Detector as TsDetector } from "./aruco-tracking/aruco";
+import arucoWatBytes from "./aruco-tracking/aruco-simd.wat";
+import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-wasm";
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

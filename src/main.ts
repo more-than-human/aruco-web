@@ -1,12 +1,12 @@
+import arucoWatBytes from "./aruco-tracking/aruco-simd.wat";
+import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-wasm.ts";
+import { Tracker } from "./aruco-tracking/tracker.ts";
 import { initCamera, setupCameraSelector } from "./camera.ts";
 import { Cursor } from "./cursor/index.ts";
 import { LETTER_LANDSCAPE_HEIGHT, LETTER_LANDSCAPE_WIDTH, PaperDigitizer } from "./draw/index.ts";
 import { renderCorners, renderPaperBoundary } from "./draw/render.ts";
 import { FpsTracker } from "./fps.ts";
 import { HandTracker } from "./hand-tracking/index.ts";
-import arucoWatBytes from "./lib-wasm/aruco-simd.wat";
-import { Detector as WasmDetector, initArUcoWasm } from "./lib-wasm/aruco-wasm.ts";
-import { Tracker } from "./lib/tracker.ts";
 import "./main.css";
 import { SpeechBubble } from "./speech-bubble/index.ts";
 import { SpeechRecognizer } from "./speech/index.ts";

@@ -1,5 +1,5 @@
-import type { Marker } from "../lib/aruco.ts";
-import type { TrackedMarker } from "../lib/tracker.ts";
+import type { Marker } from "../aruco-tracking/aruco.ts";
+import type { TrackedMarker } from "../aruco-tracking/tracker.ts";
 import { PaperGeometry } from "./homography.ts";
 import { type TemporalFilterConfig, TemporalInkFilter } from "./temporal-filter.ts";
 import { AdaptiveThreshold, type ThresholdConfig } from "./threshold.ts";

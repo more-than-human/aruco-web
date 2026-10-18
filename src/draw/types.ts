@@ -1,4 +1,4 @@
-import type { IPoint } from "../lib/aruco.ts";
+import type { IPoint } from "../aruco-tracking/aruco.ts";
 
 export interface IRect {
   minX: number;
