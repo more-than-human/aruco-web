@@ -88,8 +88,8 @@ export function renderPaperStatus(
   height: number,
   segments: DrawingSegment[] = [],
   pointerPos: Point2D | null = null,
-  activeSegment: DrawingSegment | null = null,
-  durationMs: number = 0,
+  _activeSegment: DrawingSegment | null = null,
+  _durationMs: number = 0,
 ): void {
   // Clear paper canvas
   ctx.fillStyle = "#ffffff";
@@ -175,48 +175,6 @@ export function renderPaperStatus(
     ctx.stroke();
     ctx.restore();
   }
-
-  // Status Badge in top-right
-  const badgeX = width - 290;
-  const badgeY = 24;
-  const badgeW = 266;
-  const badgeH = 46;
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
-  ctx.strokeStyle = "#e2e8f0";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8);
-  ctx.fill();
-  ctx.stroke();
-
-  // Status indicator light
-  const dotColor = tracking.isHeld ? COLOR_HELD : COLOR_LOCKED;
-  ctx.fillStyle = dotColor;
-  ctx.beginPath();
-  ctx.arc(badgeX + 16, badgeY + badgeH / 2, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Status text
-  ctx.fillStyle = "#1e293b";
-  ctx.font = "600 12px system-ui, -apple-system, sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  const title = tracking.isHeld ? `Tracking (Held: ${tracking.visibleCount}/4)` : `Paper Locked (${tracking.sheetMm[0]} × ${tracking.sheetMm[1]} mm)`;
-  ctx.fillText(title, badgeX + 28, badgeY + 16);
-
-  const frozenSeg = segments.find((s) => s.isFrozen);
-  ctx.fillStyle = activeSegment || frozenSeg ? COLOR_ACTIVE_STROKE : "#64748b";
-  ctx.font = "500 10px system-ui, -apple-system, sans-serif";
-  const segmentCount = segments.length;
-  const subtitle = activeSegment
-    ? `Active: ${activeSegment.id} (${activeSegment.inkAreaMm2.toFixed(0)} mm²)`
-    : frozenSeg
-      ? `Frozen: ${frozenSeg.id} (hand near)`
-      : segmentCount > 0
-        ? `${segmentCount} segment${segmentCount === 1 ? "" : "s"} (${durationMs.toFixed(0)}ms)`
-        : `No ink detected (${durationMs.toFixed(0)}ms)`;
-  ctx.fillText(subtitle, badgeX + 28, badgeY + 31);
 
   ctx.restore();
 }
