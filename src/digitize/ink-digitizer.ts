@@ -1,7 +1,7 @@
 import { CvScope } from "./cv-scope.ts";
 import { extractInkMask, type InkExtractorOptions } from "./ink-extractor.ts";
 import { isOpenCVReady } from "./opencv.ts";
-import { pointToBoxDistance, SegmentTracker } from "./segment-tracker.ts";
+import { isPointInHull, pointToBoxDistance, SegmentTracker } from "./segment-tracker.ts";
 import { segmentDrawings, type SegmenterOptions } from "./segmenter.ts";
 import type { DrawingSegment, PaperTrackingResult, Point2D, Rect } from "./types.ts";
 import type { VectorizerOptions } from "./vectorizer.ts";
@@ -131,25 +131,20 @@ export class InkDigitizer {
     return null;
   }
 
-  public isPointInSegment(seg: DrawingSegment, pt: Point2D, ctx?: CanvasRenderingContext2D): boolean {
+  public isPointInSegment(seg: DrawingSegment, pt: Point2D, _ctx?: CanvasRenderingContext2D): boolean {
     const [bx, by, bw, bh] = seg.bboxPx;
     const pad = 12;
     if (pt.x < bx - pad || pt.x > bx + bw + pad || pt.y < by - pad || pt.y > by + bh + pad) {
       return false;
     }
 
-    if (!ctx) {
-      return true;
+    if (seg.hull && seg.hull.length >= 3) {
+      return isPointInHull(seg.hull, pt, pad);
     }
 
-    ctx.save();
-    ctx.lineWidth = 16;
-    const inPath = ctx.isPointInPath(seg.path2d, pt.x, pt.y, "evenodd") || ctx.isPointInStroke(seg.path2d, pt.x, pt.y);
-    ctx.restore();
-
-    // If small icon or letter, touching anywhere inside the padded bbox is accepted
+    // Fallback if hull not available (e.g. small icon or letter)
     const isSmall = bw <= 40 && bh <= 40;
-    return inPath || isSmall;
+    return isSmall;
   }
 
   /**

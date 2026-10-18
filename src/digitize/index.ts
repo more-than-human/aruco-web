@@ -5,7 +5,7 @@ export { extractInkMask, type InkExtractorOptions } from "./ink-extractor.ts";
 export { getCv, initOpenCV, isOpenCVReady } from "./opencv.ts";
 export { PaperTracker } from "./paper-tracker.ts";
 export { renderCorners, renderPaperBoundary, renderPaperStatus } from "./render.ts";
-export { boxIoU, pointToBoxDistance, SegmentTracker } from "./segment-tracker.ts";
+export { boxIoU, computeConvexHull, createHullPath2D, isPointInHull, pointToBoxDistance, pointToSegmentDistSq, SegmentTracker } from "./segment-tracker.ts";
 export { segmentDrawings, type SegmenterOptions } from "./segmenter.ts";
 export {
   DEFAULT_SHEET_CONFIG,

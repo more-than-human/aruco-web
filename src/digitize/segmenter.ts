@@ -1,5 +1,6 @@
 import type { Mat } from "@techstark/opencv-js";
 import { CvScope } from "./cv-scope.ts";
+import { createHullPath2D } from "./segment-tracker.ts";
 import type { DrawingSegment } from "./types.ts";
 import { traceContoursChaikin, type VectorizerOptions } from "./vectorizer.ts";
 
@@ -121,6 +122,8 @@ export function segmentDrawings(scope: CvScope, inkMat: Mat, pxPerMm: number, op
       inkAreaMm2: areaMm2,
       svgPath: shape.svgPath,
       path2d: new Path2D(shape.svgPath),
+      hull: shape.hull,
+      hullPath2d: createHullPath2D(shape.hull),
       isActive: false,
       isFrozen: false,
     });

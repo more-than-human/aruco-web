@@ -23,6 +23,10 @@ export interface ScreenSegment {
   svgPath: string;
   /** Canvas Path2D in paper canvas coordinates */
   path2d: Path2D;
+  /** Convex hull points in paper canvas coordinates */
+  hull?: Point2D[];
+  /** Cached Path2D of convex hull in paper canvas coordinates */
+  hullPath2d?: Path2D;
   /** Total ink area in square millimeters */
   inkAreaMm2: number;
   /** Whether mouse is currently hovering this screen segment */

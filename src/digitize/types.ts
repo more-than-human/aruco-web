@@ -98,6 +98,10 @@ export interface DrawingSegment {
   svgPath: string;
   /** Cached Path2D in canvas coordinates */
   path2d: Path2D;
+  /** Convex hull vertices in canvas coordinates */
+  hull: Point2D[];
+  /** Cached Path2D of convex hull in canvas coordinates */
+  hullPath2d: Path2D;
   /** Whether the finger pointer currently intersects this segment */
   isActive: boolean;
   /** Whether the segment is frozen in relation to markers due to finger proximity */

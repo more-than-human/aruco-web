@@ -1,5 +1,6 @@
 import type { Mat } from "@techstark/opencv-js";
 import { CvScope } from "./cv-scope.ts";
+import { computeConvexHull } from "./segment-tracker.ts";
 import type { Point2D } from "./types.ts";
 
 export interface VectorShape {
@@ -13,6 +14,8 @@ export interface VectorShape {
   widthMm: number;
   /** Height in millimeters */
   heightMm: number;
+  /** Convex hull vertices in canvas coordinates */
+  hull: Point2D[];
 }
 
 export interface VectorizerOptions {
@@ -171,6 +174,8 @@ export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: Vec
     const smoothHeight = smooth.rows;
 
     const subpaths: string[] = [];
+    const allContourPoints: Point2D[] = [];
+    const approx = scope.mat();
 
     for (let i = 0; i < contours.size(); i++) {
       const c = contours.get(i);
@@ -181,13 +186,11 @@ export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: Vec
       }
 
       // Polygon approximation
-      const approx = scope.mat();
       cv.approxPolyDP(c, approx, approxEpsilonMm * pxPerMm, true);
       const numPts = approx.rows;
 
       if (numPts < 3) {
         c.delete();
-        approx.delete();
         continue;
       }
 
@@ -199,7 +202,6 @@ export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: Vec
       }
 
       c.delete();
-      approx.delete();
 
       // Densify polygon edges longer than spacing
       const densified = densifyPolygon(rawPoints, pxPerMm);
@@ -217,8 +219,20 @@ export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: Vec
         }
         d += "Z";
         subpaths.push(d);
+
+        for (let k = 0; k < offsetPts.length; k++) {
+          allContourPoints.push({ x: offsetPts[k].x + offsetX, y: offsetPts[k].y + offsetY });
+        }
       }
     }
+
+    const fallbackHull: Point2D[] = [
+      { x: offsetX, y: offsetY },
+      { x: offsetX + inkMat.cols, y: offsetY },
+      { x: offsetX + inkMat.cols, y: offsetY + inkMat.rows },
+      { x: offsetX, y: offsetY + inkMat.rows },
+    ];
+    const hull = allContourPoints.length >= 3 ? computeConvexHull(allContourPoints) : fallbackHull;
 
     return {
       svgPath: subpaths.join(" "),
@@ -226,6 +240,7 @@ export function traceContoursChaikin(inkMat: Mat, pxPerMm: number, options?: Vec
       outlineCount: subpaths.length,
       widthMm: inkMat.cols / pxPerMm,
       heightMm: inkMat.rows / pxPerMm,
+      hull,
     };
   });
 }

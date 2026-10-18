@@ -40,9 +40,16 @@ export class CvScope {
     while (this.disposables.length > 0) {
       const obj = this.disposables.pop()!;
       try {
+        const maybeDeletable = obj as unknown as { isDeleted?: () => boolean };
+        if (typeof maybeDeletable.isDeleted === "function" && maybeDeletable.isDeleted()) {
+          continue;
+        }
         obj.delete();
       } catch (err) {
-        console.warn("Failed to delete OpenCV object:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("already deleted")) {
+          console.warn("Failed to delete OpenCV object:", err);
+        }
       }
     }
   }

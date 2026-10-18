@@ -1,3 +1,4 @@
+import { isPointInHull } from "../digitize/segment-tracker.ts";
 import type { DrawingSegment, Point2D } from "../digitize/types.ts";
 import "./board.css";
 import type { FloatingSegmentCopy, ScreenSegment } from "./types.ts";
@@ -67,7 +68,7 @@ export function viewportToCanvasPoint(screenPos: Point2D, canvas: HTMLCanvasElem
 /**
  * Tests if a screen coordinate intersects a placed screen segment.
  */
-export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, ctx: CanvasRenderingContext2D): boolean {
+export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, _ctx?: CanvasRenderingContext2D): boolean {
   const dx = point.x - seg.x;
   const dy = point.y - seg.y;
   const pad = 16;
@@ -79,14 +80,12 @@ export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, ctx: 
   const canvasX = dx / (seg.scale || 1) + seg.centerX;
   const canvasY = dy / (seg.scale || 1) + seg.centerY;
 
-  ctx.save();
-  ctx.resetTransform();
-  ctx.lineWidth = 20 / (seg.scale || 1);
-  const inPath = ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") || ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
-  ctx.restore();
+  if (seg.hull && seg.hull.length >= 3) {
+    return isPointInHull(seg.hull, { x: canvasX, y: canvasY }, pad / (seg.scale || 1));
+  }
 
   const isSmall = seg.width <= 48 && seg.height <= 48;
-  return inPath || isSmall;
+  return isSmall;
 }
 
 export class ScreenBoardManager {
@@ -313,6 +312,8 @@ export class ScreenBoardManager {
               height: bh * scale,
               svgPath: clickedPaperSeg.svgPath,
               path2d: clickedPaperSeg.path2d,
+              hull: clickedPaperSeg.hull,
+              hullPath2d: clickedPaperSeg.hullPath2d,
               inkAreaMm2: clickedPaperSeg.inkAreaMm2,
               isHovered: false,
               isDragging: false,
@@ -339,10 +340,16 @@ export class ScreenBoardManager {
 
   private findPaperSegmentAt(pt: Point2D): DrawingSegment | null {
     for (const seg of this.latestPaperSegments) {
-      const [bx, by, bw, bh] = seg.bboxPx;
-      const pad = 12;
-      if (pt.x >= bx - pad && pt.x <= bx + bw + pad && pt.y >= by - pad && pt.y <= by + bh + pad) {
-        return seg;
+      if (seg.hull && seg.hull.length >= 3) {
+        if (isPointInHull(seg.hull, pt, 12)) {
+          return seg;
+        }
+      } else {
+        const [bx, by, bw, bh] = seg.bboxPx;
+        const pad = 12;
+        if (pt.x >= bx - pad && pt.x <= bx + bw + pad && pt.y >= by - pad && pt.y <= by + bh + pad) {
+          return seg;
+        }
       }
     }
     return null;
