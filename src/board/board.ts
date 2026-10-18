@@ -67,24 +67,31 @@ export function viewportToCanvasPoint(screenPos: Point2D, canvas: HTMLCanvasElem
 /**
  * Tests if a screen coordinate intersects a placed screen segment.
  */
-export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, ctx: CanvasRenderingContext2D): boolean {
+export function isPointInScreenSegment(
+  seg: ScreenSegment,
+  point: Point2D,
+  ctx: CanvasRenderingContext2D,
+): boolean {
   const dx = point.x - seg.x;
   const dy = point.y - seg.y;
-  const pad = 12;
+  const pad = 16;
 
   if (Math.abs(dx) > seg.width / 2 + pad || Math.abs(dy) > seg.height / 2 + pad) {
     return false;
   }
 
-  const canvasX = dx / seg.scale + seg.centerX;
-  const canvasY = dy / seg.scale + seg.centerY;
+  const canvasX = dx / (seg.scale || 1) + seg.centerX;
+  const canvasY = dy / (seg.scale || 1) + seg.centerY;
 
   ctx.save();
-  ctx.lineWidth = 16;
-  const inPath = ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") || ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
+  ctx.resetTransform();
+  ctx.lineWidth = 20 / (seg.scale || 1);
+  const inPath =
+    ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") ||
+    ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
   ctx.restore();
 
-  const isSmall = seg.width <= 40 && seg.height <= 40;
+  const isSmall = seg.width <= 48 && seg.height <= 48;
   return inPath || isSmall;
 }
 
@@ -102,6 +109,7 @@ export class ScreenBoardManager {
   private dragStartPos: Point2D = { x: 0, y: 0 };
   private hasMovedDuringDrag = false;
   private mouseScreenPos: Point2D | null = null;
+  private latestFingerScreenPos: Point2D | null = null;
   private nextCopyId = 1;
 
   // Cached paper context and segments for interaction testing
@@ -129,6 +137,7 @@ export class ScreenBoardManager {
     this.floatingCopy = null;
     this.draggingSegment = null;
     this.mouseScreenPos = null;
+    this.latestFingerScreenPos = null;
     this.canvas.style.cursor = "default";
     this.render();
   }
@@ -143,16 +152,69 @@ export class ScreenBoardManager {
   }
 
   public isHoveringOrInteracting(): boolean {
-    return this.floatingCopy !== null || this.draggingSegment !== null || this.screenSegments.some((s) => s.isHovered);
+    return (
+      this.floatingCopy !== null ||
+      this.draggingSegment !== null ||
+      this.screenSegments.some((s) => s.isHovered)
+    );
+  }
+
+  public getHoveredSegment(): ScreenSegment | null {
+    return this.screenSegments.find((s) => s.isHovered) ?? null;
   }
 
   /**
    * Main per-frame update and render call.
    */
-  public update(paperSegments: DrawingSegment[], paperCanvas: HTMLCanvasElement): void {
+  public update(
+    paperSegments: DrawingSegment[],
+    paperCanvas: HTMLCanvasElement,
+    fingerScreenPos?: Point2D | null,
+  ): void {
     this.latestPaperCanvas = paperCanvas;
     this.latestPaperSegments = paperSegments;
+    this.latestFingerScreenPos = fingerScreenPos ?? null;
+
+    this.updateHoverStates(this.latestFingerScreenPos);
     this.render();
+  }
+
+  /**
+   * Updates isHovered states for screen segments and adjusts cursor.
+   * Both mouse and finger pointer have the same ability to hover over segments and make them blue.
+   */
+  private updateHoverStates(fingerScreenPos?: Point2D | null): void {
+    let mouseHit: ScreenSegment | null = null;
+    let fingerHit: ScreenSegment | null = null;
+
+    for (let i = this.screenSegments.length - 1; i >= 0; i--) {
+      const seg = this.screenSegments[i];
+      const hitMouse =
+        !mouseHit && this.mouseScreenPos
+          ? isPointInScreenSegment(seg, this.mouseScreenPos, this.ctx)
+          : false;
+      const hitFinger =
+        !fingerHit && fingerScreenPos
+          ? isPointInScreenSegment(seg, fingerScreenPos, this.ctx)
+          : false;
+
+      if (hitMouse) mouseHit = seg;
+      if (hitFinger) fingerHit = seg;
+
+      seg.isHovered = seg === mouseHit || seg === fingerHit;
+    }
+
+    if (!this.draggingSegment && !this.floatingCopy) {
+      if (mouseHit) {
+        this.canvas.style.cursor = "grab";
+      } else if (this.latestPaperCanvas && this.mouseScreenPos) {
+        const mousePaperPt = this.getMouseCanvasPoint(this.latestPaperCanvas);
+        const hitPaper = mousePaperPt && this.findPaperSegmentAt(mousePaperPt) !== null;
+        this.canvas.style.cursor = hitPaper ? "pointer" : "default";
+      } else {
+        this.canvas.style.cursor = "default";
+      }
+    }
   }
 
   private initEventListeners(): void {
@@ -183,43 +245,7 @@ export class ScreenBoardManager {
         return;
       }
 
-      // Hit-test placed screen segments first (top-to-bottom)
-      let hitScreen: ScreenSegment | null = null;
-      for (let i = this.screenSegments.length - 1; i >= 0; i--) {
-        const seg = this.screenSegments[i];
-        if (!hitScreen && isPointInScreenSegment(seg, this.mouseScreenPos, this.ctx)) {
-          seg.isHovered = true;
-          hitScreen = seg;
-        } else {
-          seg.isHovered = false;
-        }
-      }
-
-      if (hitScreen) {
-        this.canvas.style.cursor = "grab";
-        this.render();
-        return;
-      }
-
-      // Check if mouse is hovering over a paper segment
-      if (this.latestPaperCanvas) {
-        const paperPt = viewportToCanvasPoint(this.mouseScreenPos, this.latestPaperCanvas);
-        if (paperPt) {
-          const hitPaper = this.latestPaperSegments.some((seg) => {
-            const [bx, by, bw, bh] = seg.bboxPx;
-            const pad = 12;
-            return paperPt.x >= bx - pad && paperPt.x <= bx + bw + pad && paperPt.y >= by - pad && paperPt.y <= by + bh + pad;
-          });
-
-          if (hitPaper) {
-            this.canvas.style.cursor = "pointer";
-            this.render();
-            return;
-          }
-        }
-      }
-
-      this.canvas.style.cursor = "default";
+      this.updateHoverStates(this.latestFingerScreenPos);
       this.render();
     });
 
@@ -326,9 +352,7 @@ export class ScreenBoardManager {
 
     this.canvas.addEventListener("mouseleave", () => {
       this.mouseScreenPos = null;
-      for (const seg of this.screenSegments) {
-        seg.isHovered = false;
-      }
+      this.updateHoverStates(this.latestFingerScreenPos);
       this.render();
     });
   }
@@ -378,8 +402,16 @@ export class ScreenBoardManager {
       this.ctx.fillStyle = COLOR_ACTIVE_FILL;
       this.ctx.fill(seg.path2d, "evenodd");
       this.ctx.strokeStyle = COLOR_ACTIVE_STROKE;
-      this.ctx.lineWidth = 3.5 / seg.scale;
+      this.ctx.lineWidth = 3.5 / (seg.scale || 1);
       this.ctx.stroke(seg.path2d);
+
+      // Render segment identifier label
+      const [bx, by] = seg.bboxPx;
+      this.ctx.save();
+      this.ctx.fillStyle = COLOR_ACTIVE_STROKE;
+      this.ctx.font = `600 ${Math.round(12 / (seg.scale || 1))}px system-ui, -apple-system, sans-serif`;
+      this.ctx.fillText(seg.sourceId || seg.id, bx, Math.max(16, by - 6));
+      this.ctx.restore();
     } else {
       this.ctx.fillStyle = COLOR_INK;
       this.ctx.fill(seg.path2d, "evenodd");

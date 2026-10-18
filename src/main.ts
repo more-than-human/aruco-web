@@ -217,18 +217,20 @@ function startDetectionLoop(
       inkDigitizer.processFrame(imageData, tracking, now);
     }
 
+    const pointerOnPaper = fingerCanvasPos ?? mouseCanvasPos;
+
     renderPaperStatus(
       paperCtx,
       tracking,
       DIGITIZED_PAPER_WIDTH,
       DIGITIZED_PAPER_HEIGHT,
       inkDigitizer.getSegments(),
-      fingerCanvasPos,
+      pointerOnPaper,
       activeSegment,
       inkDigitizer.getLastDurationMs(),
     );
 
-    boardManager.update(inkDigitizer.getSegments(), paperCanvas);
+    boardManager.update(inkDigitizer.getSegments(), paperCanvas, screenPos);
 
     renderCorners(ctx, markers);
     if (tracking.isTracking) {
