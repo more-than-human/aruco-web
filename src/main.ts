@@ -1,5 +1,5 @@
 import arucoWatBytes from "./aruco-tracking/aruco-simd.wat";
-import { Detector as WasmDetector, initArUcoWasm } from "./aruco-tracking/aruco-wasm.ts";
+import { initArUcoWasm, Detector as WasmDetector } from "./aruco-tracking/aruco-wasm.ts";
 import { Tracker } from "./aruco-tracking/tracker.ts";
 import { ScreenBoardManager, viewportToCanvasPoint } from "./board/index.ts";
 import { initCamera, setupCameraSelector } from "./camera.ts";
@@ -154,19 +154,10 @@ window.addEventListener("load", async () => {
     },
   );
 
-  startDetectionLoop(
-    video,
-    cameraCanvas,
-    paperCanvas,
-    tracker,
-    paperTracker,
-    inkDigitizer,
-    boardManager,
-    () => ({
-      screenPos: latestPointerScreenPos,
-      fingerTipNorm: latestFingerTipNorm,
-    }),
-  );
+  startDetectionLoop(video, cameraCanvas, paperCanvas, tracker, paperTracker, inkDigitizer, boardManager, () => ({
+    screenPos: latestPointerScreenPos,
+    fingerTipNorm: latestFingerTipNorm,
+  }));
 
   // Initialize and start hand tracking asynchronously
   handTracker
@@ -218,12 +209,7 @@ function startDetectionLoop(
     const fingerCanvasPos = screenCanvasPos ?? physicalCanvasPos;
     const mouseCanvasPos = boardManager.getMouseCanvasPoint(paperCanvas);
 
-    const activeSegment = inkDigitizer.updatePointer(
-      fingerCanvasPos,
-      mouseCanvasPos,
-      paperCtx,
-      now,
-    );
+    const activeSegment = inkDigitizer.updatePointer(fingerCanvasPos, mouseCanvasPos, paperCtx, now);
 
     if (tracking.isTracking) {
       inkDigitizer.processFrame(imageData, tracking, now);

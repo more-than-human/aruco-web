@@ -48,10 +48,7 @@ export function getPaperCanvasScreenMetrics(canvas: HTMLCanvasElement): {
 /**
  * Maps viewport screen coordinates to paper canvas coordinates.
  */
-export function viewportToCanvasPoint(
-  screenPos: Point2D,
-  canvas: HTMLCanvasElement,
-): Point2D | null {
+export function viewportToCanvasPoint(screenPos: Point2D, canvas: HTMLCanvasElement): Point2D | null {
   const { scale, offsetX, offsetY, renderedW, renderedH } = getPaperCanvasScreenMetrics(canvas);
   if (renderedW === 0 || renderedH === 0 || scale === 0) return null;
 
@@ -70,11 +67,7 @@ export function viewportToCanvasPoint(
 /**
  * Tests if a screen coordinate intersects a placed screen segment.
  */
-export function isPointInScreenSegment(
-  seg: ScreenSegment,
-  point: Point2D,
-  ctx: CanvasRenderingContext2D,
-): boolean {
+export function isPointInScreenSegment(seg: ScreenSegment, point: Point2D, ctx: CanvasRenderingContext2D): boolean {
   const dx = point.x - seg.x;
   const dy = point.y - seg.y;
   const pad = 12;
@@ -88,9 +81,7 @@ export function isPointInScreenSegment(
 
   ctx.save();
   ctx.lineWidth = 16;
-  const inPath =
-    ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") ||
-    ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
+  const inPath = ctx.isPointInPath(seg.path2d, canvasX, canvasY, "evenodd") || ctx.isPointInStroke(seg.path2d, canvasX, canvasY);
   ctx.restore();
 
   const isSmall = seg.width <= 40 && seg.height <= 40;
@@ -152,11 +143,7 @@ export class ScreenBoardManager {
   }
 
   public isHoveringOrInteracting(): boolean {
-    return (
-      this.floatingCopy !== null ||
-      this.draggingSegment !== null ||
-      this.screenSegments.some((s) => s.isHovered)
-    );
+    return this.floatingCopy !== null || this.draggingSegment !== null || this.screenSegments.some((s) => s.isHovered);
   }
 
   /**
@@ -180,12 +167,7 @@ export class ScreenBoardManager {
       if (this.draggingSegment) {
         this.draggingSegment.x = e.clientX - this.dragOffset.x;
         this.draggingSegment.y = e.clientY - this.dragOffset.y;
-        if (
-          Math.hypot(
-            e.clientX - this.dragStartPos.x,
-            e.clientY - this.dragStartPos.y,
-          ) > 4
-        ) {
+        if (Math.hypot(e.clientX - this.dragStartPos.x, e.clientY - this.dragStartPos.y) > 4) {
           this.hasMovedDuringDrag = true;
         }
         this.canvas.style.cursor = "grabbing";
@@ -226,12 +208,7 @@ export class ScreenBoardManager {
           const hitPaper = this.latestPaperSegments.some((seg) => {
             const [bx, by, bw, bh] = seg.bboxPx;
             const pad = 12;
-            return (
-              paperPt.x >= bx - pad &&
-              paperPt.x <= bx + bw + pad &&
-              paperPt.y >= by - pad &&
-              paperPt.y <= by + bh + pad
-            );
+            return paperPt.x >= bx - pad && paperPt.x <= bx + bw + pad && paperPt.y >= by - pad && paperPt.y <= by + bh + pad;
           });
 
           if (hitPaper) {
@@ -360,12 +337,7 @@ export class ScreenBoardManager {
     for (const seg of this.latestPaperSegments) {
       const [bx, by, bw, bh] = seg.bboxPx;
       const pad = 12;
-      if (
-        pt.x >= bx - pad &&
-        pt.x <= bx + bw + pad &&
-        pt.y >= by - pad &&
-        pt.y <= by + bh + pad
-      ) {
+      if (pt.x >= bx - pad && pt.x <= bx + bw + pad && pt.y >= by - pad && pt.y <= by + bh + pad) {
         return seg;
       }
     }

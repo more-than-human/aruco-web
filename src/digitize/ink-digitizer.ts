@@ -102,8 +102,7 @@ export class InkDigitizer {
       }
 
       // 2. Mouse hover & intersection
-      const mouseIntersecting =
-        mouseCanvasPos !== null && this.isPointInSegment(seg, mouseCanvasPos, ctx);
+      const mouseIntersecting = mouseCanvasPos !== null && this.isPointInSegment(seg, mouseCanvasPos, ctx);
 
       // Freeze when mouse hovers so camera exposure or hand shadow doesn't distort segment
       if (mouseIntersecting) {
@@ -123,10 +122,7 @@ export class InkDigitizer {
     return active;
   }
 
-  public findSegmentAtPoint(
-    pt: Point2D,
-    ctx?: CanvasRenderingContext2D,
-  ): DrawingSegment | null {
+  public findSegmentAtPoint(pt: Point2D, ctx?: CanvasRenderingContext2D): DrawingSegment | null {
     for (const seg of this.latestSegments) {
       if (this.isPointInSegment(seg, pt, ctx)) {
         return seg;
