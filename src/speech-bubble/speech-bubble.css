@@ -5,7 +5,6 @@
   transform: translateX(-50%);
   z-index: 3000;
 
-  box-sizing: border-box;
   max-width: min(85vw, 840px);
   min-width: 200px;
   padding: 8px 14px;
@@ -14,27 +13,12 @@
   align-items: center;
   gap: 12px;
 
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
   color: #ffffff;
   background: rgba(18, 18, 22, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-
-  transition:
-    border-radius 180ms ease,
-    padding 180ms ease,
-    background-color 180ms ease,
-    transform 180ms ease,
-    opacity 180ms ease;
 }
 
 /* When showing longer transcript, allow wrapping and rounded rectangle card */
@@ -60,20 +44,10 @@
   color: #ffffff;
   cursor: pointer;
   outline: none;
-
-  transition:
-    background-color 160ms ease,
-    transform 140ms ease,
-    box-shadow 160ms ease;
 }
 
 .speech-bubble__toggle:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.25);
-  transform: scale(1.06);
-}
-
-.speech-bubble__toggle:active:not(:disabled) {
-  transform: scale(0.96);
 }
 
 .speech-bubble__toggle:focus-visible {
@@ -171,32 +145,13 @@
   color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   outline: none;
-
-  transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    transform 120ms ease;
 }
 
 .speech-bubble__clear:hover {
   background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
-  transform: scale(1.08);
-}
-
-.speech-bubble__clear:active {
-  transform: scale(0.92);
 }
 
 .speech-bubble__clear[hidden] {
   display: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .speech-bubble,
-  .speech-bubble__toggle,
-  .speech-bubble__clear {
-    transition: none;
-    animation: none;
-  }
 }
